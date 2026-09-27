@@ -1,9 +1,11 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import type { Deal } from "../types/Deal.js";
+import type { DealsStore } from "./DealsStore.js";
 
 type PostedDeals = Record<string, string>;
 
-export class PostedDealsStore {
+export class PostedDealsStore implements DealsStore {
   private readonly filePath: string;
   private records: PostedDeals = {};
 
@@ -28,6 +30,12 @@ export class PostedDealsStore {
   hasRecentlyPosted(idOrUrl: string, now = Date.now()): boolean {
     const postedAt = this.records[idOrUrl];
     return postedAt !== undefined && now - Date.parse(postedAt) < this.retentionMs;
+  }
+
+  async filterUnposted(deals: Deal[]): Promise<Deal[]> {
+    return deals.filter(
+      (deal) => !this.hasRecentlyPosted(deal.id) && !this.hasRecentlyPosted(deal.originalUrl),
+    );
   }
 
   async markPosted(id: string, originalUrl: string, now = new Date()): Promise<void> {

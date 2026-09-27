@@ -1,10 +1,11 @@
 import "dotenv/config";
 import { z } from "zod";
 
-const booleanFromString = z
-  .string()
-  .optional()
-  .transform((value) => value?.toLowerCase() !== "false");
+const booleanFromString = (defaultValue: boolean) =>
+  z
+    .enum(["true", "false"])
+    .default(defaultValue ? "true" : "false")
+    .transform((value) => value === "true");
 
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(10),
@@ -16,9 +17,18 @@ const envSchema = z.object({
     .url()
     .default("https://www.mercadolivre.com.br/ofertas/?cat=MLB421969&category=MLB1648"),
   DATA_FILE: z.string().default("./data/posted-deals.json"),
-  RUN_ON_START: booleanFromString,
+  RUN_ON_START: booleanFromString(true),
+  AMAZON_ENABLED: booleanFromString(false),
+  UPSTASH_REDIS_REST_URL: z.url().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
   PORT: z.coerce.number().int().positive().optional(),
-});
+}).refine(
+  (value) => Boolean(value.UPSTASH_REDIS_REST_URL) === Boolean(value.UPSTASH_REDIS_REST_TOKEN),
+  {
+    message: "UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN devem ser informados juntos",
+    path: ["UPSTASH_REDIS_REST_URL"],
+  },
+);
 
 const parsed = envSchema.safeParse(process.env);
 

@@ -1,5 +1,5 @@
 import type { AffiliateProvider } from "../providers/AffiliateProvider.js";
-import { PostedDealsStore } from "../storage/PostedDealsStore.js";
+import type { DealsStore } from "../storage/DealsStore.js";
 import type { Deal } from "../types/Deal.js";
 import { addAffiliateTag } from "../utils/affiliate.js";
 import { TelegramPublisher } from "./TelegramPublisher.js";
@@ -9,7 +9,7 @@ export class DealsJob {
 
   constructor(
     private readonly providers: AffiliateProvider[],
-    private readonly store: PostedDealsStore,
+    private readonly store: DealsStore,
     private readonly publisher: TelegramPublisher,
     private readonly tags: { amazon: string; mercadoLivre: string },
   ) {}
@@ -26,7 +26,7 @@ export class DealsJob {
       for (const provider of this.providers) {
         try {
           const deals = await provider.getDeals();
-          available.push(...deals.filter((deal) => !this.wasPosted(deal)));
+          available.push(...(await this.store.filterUnposted(deals)));
           console.log(`${provider.name}: ${deals.length} ofertas encontradas.`);
         } catch (error) {
           console.error(`Falha ao consultar ${provider.name}.`, error);
@@ -46,10 +46,6 @@ export class DealsJob {
     } finally {
       this.running = false;
     }
-  }
-
-  private wasPosted(deal: Deal): boolean {
-    return this.store.hasRecentlyPosted(deal.id) || this.store.hasRecentlyPosted(deal.originalUrl);
   }
 }
 

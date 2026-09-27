@@ -1,18 +1,26 @@
 import { createServer } from "node:http";
 import cron from "node-cron";
 import { env } from "./config/env.js";
+import type { AffiliateProvider } from "./providers/AffiliateProvider.js";
 import { AmazonProvider } from "./providers/AmazonProvider.js";
 import { MercadoLivreProvider } from "./providers/MercadoLivreProvider.js";
 import { DealsJob } from "./services/DealsJob.js";
 import { TelegramPublisher } from "./services/TelegramPublisher.js";
+import type { DealsStore } from "./storage/DealsStore.js";
 import { PostedDealsStore } from "./storage/PostedDealsStore.js";
+import { UpstashPostedDealsStore } from "./storage/UpstashPostedDealsStore.js";
 
 async function main(): Promise<void> {
-  const store = new PostedDealsStore(env.DATA_FILE);
+  const store: DealsStore = env.UPSTASH_REDIS_REST_URL
+    ? new UpstashPostedDealsStore(env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN!)
+    : new PostedDealsStore(env.DATA_FILE);
   await store.initialize();
 
+  const providers: AffiliateProvider[] = [new MercadoLivreProvider(env.ML_DEALS_URL)];
+  if (env.AMAZON_ENABLED) providers.push(new AmazonProvider(env.AMAZON_DEALS_URL));
+
   const job = new DealsJob(
-    [new AmazonProvider(env.AMAZON_DEALS_URL), new MercadoLivreProvider(env.ML_DEALS_URL)],
+    providers,
     store,
     new TelegramPublisher(env.TELEGRAM_BOT_TOKEN, env.CHANNEL_ID),
     { amazon: env.AMAZON_TAG, mercadoLivre: env.ML_TAG },
