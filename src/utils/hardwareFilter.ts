@@ -14,6 +14,7 @@ const BLOCKED_TERMS = [
   /\b(tablet|celular|smartphone|iphone|ipad|impressora|headset|fone|monitor|notebook|mouse|teclado|webcam|roteador)\b/i,
   /\b(mosquito|inseto|insetos|praga|pragas|fly\s+bug|lampada|l[aâ]mpada|led\s+luz|armadilha|assassino\s+de\s+insetos)\b/i,
   /\b(carregador|adaptador|fonte\s+usb|fonte\s+alimentacao\s+usb|fonte\s+alimenta[cç][aã]o\s+usb)\b/i,
+  /\b(raspberry\s*pi|raspberry|rp2040|arduino|esp32|esp8266|microcontrolador(?:es)?|pico\s+w|pico\s+rp2040)\b/i,
 ];
 
 export function isPcHardwareDeal(title: string): boolean {
