@@ -29,4 +29,14 @@ describe("formatCaption", () => {
     expect(formatCaption({ ...baseDeal, discountPercentage: 50 }, baseDeal.originalUrl)).toContain("💥 DESCONTO IMPERDÍVEL");
     expect(formatCaption(baseDeal, baseDeal.originalUrl)).toContain("#Armazenamento");
   });
+
+  it("prioriza a categoria do equipamento sobre seus componentes", () => {
+    const notebook = { ...baseDeal, title: "Notebook Vaio Ryzen 7 16GB RAM SSD" };
+    const tablet = { ...baseDeal, title: "Positivo Vision TAB10 4GB RAM 128GB SSD" };
+
+    expect(formatCaption(notebook, notebook.originalUrl)).toContain("#Notebook");
+    expect(formatCaption(notebook, notebook.originalUrl)).not.toContain("#CPU");
+    expect(formatCaption(tablet, tablet.originalUrl)).toContain("#Tablet");
+    expect(formatCaption(tablet, tablet.originalUrl)).not.toContain("#RAM");
+  });
 });
