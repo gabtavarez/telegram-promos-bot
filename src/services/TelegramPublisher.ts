@@ -30,18 +30,18 @@ export class TelegramPublisher {
 export function formatCaption(deal: Deal, affiliateUrl: string): string {
   const previous = deal.previousPrice ? `<del>${currency.format(deal.previousPrice)}</del> ` : "";
   const discount = deal.discountPercentage ? ` (-${deal.discountPercentage}%)` : "";
-  const coupon = deal.couponCode ? ["", `-CUPOM: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
+  const coupon = deal.couponCode ? ["", `🎟️ CUPOM: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
 
   return [
-    `<b>${escapeHtml(deal.title)}</b>`,
+    `🔥 <b>${escapeHtml(deal.title)}</b>`,
     "",
-    `${previous}<b>${currency.format(deal.currentPrice)}</b>${discount}`,
+    `💰 ${previous}<b>${currency.format(deal.currentPrice)}</b>${discount}`,
     ...coupon,
     "",
-    "VER OFERTA",
+    "✅ VER OFERTA",
     escapeHtml(affiliateUrl),
     "",
-    "#Anuncio",
+    "📢 #Anuncio",
     "⚠️ Preços e disponibilidade podem mudar a qualquer momento.",
   ].join("\n");
 }
