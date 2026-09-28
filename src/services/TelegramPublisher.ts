@@ -1,4 +1,4 @@
-import { Bot } from "grammy";
+import { Bot, InlineKeyboard } from "grammy";
 import type { Deal } from "../types/Deal.js";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -12,16 +12,19 @@ export class TelegramPublisher {
 
   async publish(deal: Deal, affiliateUrl: string): Promise<void> {
     const caption = formatCaption(deal, affiliateUrl);
+    const keyboard = new InlineKeyboard().url("✅ VER OFERTA", affiliateUrl);
     try {
       await this.bot.api.sendPhoto(this.channelId, deal.imageUrl, {
         caption,
         parse_mode: "HTML",
+        reply_markup: keyboard,
       });
     } catch (error) {
       console.warn("Falha ao enviar a imagem; enviando a oferta sem foto.", error);
       await this.bot.api.sendMessage(this.channelId, caption, {
         parse_mode: "HTML",
         link_preview_options: { is_disabled: false },
+        reply_markup: keyboard,
       });
     }
   }
@@ -30,7 +33,8 @@ export class TelegramPublisher {
 export function formatCaption(deal: Deal, affiliateUrl: string): string {
   const previous = deal.previousPrice ? `<del>${currency.format(deal.previousPrice)}</del> ` : "";
   const discount = deal.discountPercentage ? ` (-${deal.discountPercentage}%)` : "";
-  const discountHighlight = (deal.discountPercentage ?? 0) > 30 ? "🚀 SUPER OFERTA — " : "";
+  const discountHighlight = getDiscountHighlight(deal.discountPercentage);
+  const category = getCategoryHashtag(deal.title);
   const coupon = deal.couponCode ? ["", `🎟️ CUPOM: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
 
   return [
@@ -42,9 +46,35 @@ export function formatCaption(deal: Deal, affiliateUrl: string): string {
     "✅ VER OFERTA",
     escapeHtml(affiliateUrl),
     "",
-    "📢 #Anuncio",
+    `📢 #Anuncio ${category}`,
     "⚠️ Preços e disponibilidade podem mudar a qualquer momento.",
   ].join("\n");
+}
+
+export function getDiscountHighlight(discountPercentage?: number): string {
+  if ((discountPercentage ?? 0) >= 50) return "💥 DESCONTO IMPERDÍVEL — ";
+  if ((discountPercentage ?? 0) > 30) return "🚀 SUPER OFERTA — ";
+  if ((discountPercentage ?? 0) >= 15) return "🔥 OFERTA BOA — ";
+  return "";
+}
+
+export function getCategoryHashtag(title: string): string {
+  const normalized = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const categories: Array<[RegExp, string]> = [
+    [/\b(rtx|gtx|radeon|geforce|gpu|placa de video)\b/, "#GPU"],
+    [/\b(processador|cpu|ryzen|intel core|xeon|athlon)\b/, "#CPU"],
+    [/\b(placa[- ]?mae|motherboard|b[45678]\d0|x[3567]\d0|a[356]\d0)\b/, "#PlacaMae"],
+    [/\b(memoria ram|ram|ddr[345]|sodimm|dimm)\b/, "#RAM"],
+    [/\b(ssd|nvme|m\.2|hd externo|hard drive)\b/, "#Armazenamento"],
+    [/\b(fonte|psu|80 plus|sfx|flex-atx)\b/, "#Fonte"],
+    [/\b(gabinete|pc case|mid[- ]?tower|mini[- ]?itx|sff)\b/, "#Gabinete"],
+    [/\b(mouse|mousepad)\b/, "#Mouse"],
+    [/\b(teclado|keyboard|tkl)\b/, "#Teclado"],
+    [/\b(headset|fone gamer|microfone)\b/, "#Audio"],
+    [/\b(monitor|ultrawide|screenbar)\b/, "#Monitor"],
+  ];
+
+  return categories.find(([pattern]) => pattern.test(normalized))?.[1] ?? "#Setup";
 }
 
 function escapeHtml(value: string): string {

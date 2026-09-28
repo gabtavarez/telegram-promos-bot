@@ -7,6 +7,7 @@ import { MercadoLivreProvider } from "./providers/MercadoLivreProvider.js";
 import { AliExpressProvider } from "./providers/aliexpress.provider.js";
 import { DealsJob } from "./services/DealsJob.js";
 import { TelegramPublisher } from "./services/TelegramPublisher.js";
+import { TelegramAdminBot } from "./services/TelegramAdminBot.js";
 import type { DealsStore } from "./storage/DealsStore.js";
 import { PostedDealsStore } from "./storage/PostedDealsStore.js";
 import { UpstashPostedDealsStore } from "./storage/UpstashPostedDealsStore.js";
@@ -36,6 +37,12 @@ async function main(): Promise<void> {
     { amazon: env.AMAZON_TAG, mercadoLivre: env.ML_TAG },
   );
 
+  if (env.TELEGRAM_ADMIN_USER_ID) {
+    new TelegramAdminBot(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_ADMIN_USER_ID, job).start();
+  } else {
+    console.log("Comandos administrativos desativados: TELEGRAM_ADMIN_USER_ID nao configurado.");
+  }
+
   startHttpServer(env.PORT, () => job.run(), () => job.testSend(), env.RUN_NOW_TOKEN);
 
   const defaultIntervalMs = 45 * 60 * 1_000;
@@ -64,7 +71,7 @@ async function main(): Promise<void> {
 
 function startHttpServer(
   port: number | undefined,
-  runNow: () => Promise<void>,
+  runNow: () => Promise<unknown>,
   testSend: () => Promise<void>,
   runNowToken?: string,
 ): void {

@@ -22,6 +22,10 @@ const envSchema = z.object({
   DATA_FILE: z.string().default("./data/posted-deals.json"),
   RUN_ON_START: booleanFromString(true),
   RUN_NOW_TOKEN: optionalString,
+  TELEGRAM_ADMIN_USER_ID: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().regex(/^\d+$/).optional(),
+  ),
   CRON_SCHEDULE: optionalString,
   AMAZON_ENABLED: booleanFromString(false),
   ALIEXPRESS_ENABLED: booleanFromString(false),

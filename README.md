@@ -16,12 +16,15 @@ Preencha no `.env`:
 
 - `TELEGRAM_BOT_TOKEN`: token criado pelo BotFather.
 - `CHANNEL_ID`: `@nome_do_canal` ou o ID numérico do canal. O bot precisa ser administrador com permissão para publicar.
+- `TELEGRAM_ADMIN_USER_ID`: ID numérico do único usuário autorizado a usar os comandos administrativos.
 - `AMAZON_TAG`: ID do programa de associados da Amazon.
 - `ML_TAG`: parâmetros de rastreio do Mercado Livre em formato de query string, como `matt_tool=123&matt_word=hardware`.
 
 As URLs das páginas monitoradas (por padrão, ofertas de informática/hardware), o caminho do histórico e a execução imediata ao iniciar também podem ser alterados pelas variáveis opcionais documentadas em `.env.example`. A Amazon fica desativada por padrão; só use `AMAZON_ENABLED=true` depois de confirmar que a coleta e a divulgação cumprem as regras da sua conta de Associado.
 
 ## Comandos
+
+No chat privado com o bot, o administrador pode usar `/oferta`, `/status`, `/pausar` e `/retomar`.
 
 ```bash
 npm run dev       # desenvolvimento

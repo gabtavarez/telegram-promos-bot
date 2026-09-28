@@ -6,6 +6,10 @@ import { TelegramPublisher } from "./TelegramPublisher.js";
 
 export class DealsJob {
   private running = false;
+  private paused = false;
+  private lastRunAt?: Date;
+  private lastPublishedAt?: Date;
+  private lastPublishedTitle?: string;
 
   constructor(
     private readonly providers: AffiliateProvider[],
@@ -14,10 +18,14 @@ export class DealsJob {
     private readonly tags: { amazon: string; mercadoLivre: string },
   ) {}
 
-  async run(): Promise<void> {
+  async run(ignorePause = false): Promise<JobRunResult> {
+    if (this.paused && !ignorePause) {
+      console.log("Bot pausado; ciclo ignorado.");
+      return "paused";
+    }
     if (this.running) {
       console.log("Ciclo anterior ainda em execucao; novo ciclo ignorado.");
-      return;
+      return "already-running";
     }
 
     this.running = true;
@@ -36,16 +44,39 @@ export class DealsJob {
       const best = selectBestDeal(available);
       if (!best) {
         console.log("Nenhuma oferta nova encontrada neste ciclo.");
-        return;
+        return "no-deal";
       }
 
       const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
       await this.publisher.publish(best, affiliateUrl);
       await this.store.markPosted(best.id, best.originalUrl);
+      this.lastPublishedAt = new Date();
+      this.lastPublishedTitle = best.title;
       console.log(`Oferta publicada: ${best.title}`);
+      return "published";
     } finally {
+      this.lastRunAt = new Date();
       this.running = false;
     }
+  }
+
+  pause(): void {
+    this.paused = true;
+  }
+
+  resume(): void {
+    this.paused = false;
+  }
+
+  getStatus(): DealsJobStatus {
+    return {
+      paused: this.paused,
+      running: this.running,
+      providers: this.providers.map((provider) => provider.name),
+      lastRunAt: this.lastRunAt,
+      lastPublishedAt: this.lastPublishedAt,
+      lastPublishedTitle: this.lastPublishedTitle,
+    };
   }
 
   async testSend(): Promise<void> {
@@ -74,6 +105,17 @@ export class DealsJob {
     }
     return deals;
   }
+}
+
+export type JobRunResult = "published" | "no-deal" | "already-running" | "paused";
+
+export interface DealsJobStatus {
+  paused: boolean;
+  running: boolean;
+  providers: string[];
+  lastRunAt?: Date;
+  lastPublishedAt?: Date;
+  lastPublishedTitle?: string;
 }
 
 export function selectBestDeal(deals: Deal[]): Deal | undefined {

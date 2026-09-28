@@ -4,23 +4,29 @@ import type { Deal } from "../src/types/Deal.js";
 
 const baseDeal: Deal = {
   id: "deal-1",
-  provider: "Test",
+  provider: "mercado-livre",
   title: "SSD NVMe 1 TB",
   currentPrice: 299.9,
-  link: "https://example.com/produto",
+  originalUrl: "https://example.com/produto",
   imageUrl: "https://example.com/produto.jpg",
 };
 
 describe("formatCaption", () => {
   it("destaca descontos superiores a 30%", () => {
-    const caption = formatCaption({ ...baseDeal, discountPercentage: 31 }, baseDeal.link);
+    const caption = formatCaption({ ...baseDeal, discountPercentage: 31 }, baseDeal.originalUrl);
 
     expect(caption).toContain("🚀 SUPER OFERTA — 💰");
   });
 
   it("não destaca descontos de até 30%", () => {
-    const caption = formatCaption({ ...baseDeal, discountPercentage: 30 }, baseDeal.link);
+    const caption = formatCaption({ ...baseDeal, discountPercentage: 30 }, baseDeal.originalUrl);
 
     expect(caption).not.toContain("SUPER OFERTA");
+  });
+
+  it("classifica os níveis de desconto e adiciona a categoria", () => {
+    expect(formatCaption({ ...baseDeal, discountPercentage: 15 }, baseDeal.originalUrl)).toContain("🔥 OFERTA BOA");
+    expect(formatCaption({ ...baseDeal, discountPercentage: 50 }, baseDeal.originalUrl)).toContain("💥 DESCONTO IMPERDÍVEL");
+    expect(formatCaption(baseDeal, baseDeal.originalUrl)).toContain("#Armazenamento");
   });
 });
