@@ -12,5 +12,6 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Tablet Android 14 24GB RAM")).toBe(false);
     expect(isPcHardwareDeal("Impressora Canon Pixma")).toBe(false);
     expect(isPcHardwareDeal("Headset gamer drivers 50mm")).toBe(false);
+    expect(isPcHardwareDeal("1 pc eletrico fly bug mosquito assassino de insetos led luz armadilha lampada controle pragas pequenas com fonte alimentacao usb e adaptador")).toBe(false);
   });
 });
