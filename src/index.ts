@@ -4,6 +4,7 @@ import { env } from "./config/env.js";
 import type { AffiliateProvider } from "./providers/AffiliateProvider.js";
 import { AmazonProvider } from "./providers/AmazonProvider.js";
 import { MercadoLivreProvider } from "./providers/MercadoLivreProvider.js";
+import { AliExpressProvider } from "./providers/aliexpress.provider.js";
 import { DealsJob } from "./services/DealsJob.js";
 import { TelegramPublisher } from "./services/TelegramPublisher.js";
 import type { DealsStore } from "./storage/DealsStore.js";
@@ -18,6 +19,15 @@ async function main(): Promise<void> {
 
   const providers: AffiliateProvider[] = [new MercadoLivreProvider(env.ML_DEALS_URL)];
   if (env.AMAZON_ENABLED) providers.push(new AmazonProvider(env.AMAZON_DEALS_URL));
+  if (env.ALIEXPRESS_ENABLED) {
+    providers.push(
+      new AliExpressProvider({
+        appKey: env.ALIEXPRESS_APP_KEY!,
+        appSecret: env.ALIEXPRESS_APP_SECRET!,
+        trackingId: env.ALIEXPRESS_TRACKING_ID!,
+      }),
+    );
+  }
 
   const job = new DealsJob(
     providers,

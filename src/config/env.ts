@@ -23,16 +23,30 @@ const envSchema = z.object({
   RUN_ON_START: booleanFromString(true),
   RUN_NOW_TOKEN: optionalString,
   AMAZON_ENABLED: booleanFromString(false),
+  ALIEXPRESS_ENABLED: booleanFromString(false),
+  ALIEXPRESS_APP_KEY: optionalString,
+  ALIEXPRESS_APP_SECRET: optionalString,
+  ALIEXPRESS_TRACKING_ID: optionalString,
   UPSTASH_REDIS_REST_URL: optionalUrl,
   UPSTASH_REDIS_REST_TOKEN: optionalString,
   PORT: z.coerce.number().int().positive().optional(),
-}).refine(
-  (value) => Boolean(value.UPSTASH_REDIS_REST_URL) === Boolean(value.UPSTASH_REDIS_REST_TOKEN),
-  {
-    message: "UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN devem ser informados juntos",
-    path: ["UPSTASH_REDIS_REST_URL"],
-  },
-);
+})
+  .refine(
+    (value) => Boolean(value.UPSTASH_REDIS_REST_URL) === Boolean(value.UPSTASH_REDIS_REST_TOKEN),
+    {
+      message: "UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN devem ser informados juntos",
+      path: ["UPSTASH_REDIS_REST_URL"],
+    },
+  )
+  .refine(
+    (value) =>
+      !value.ALIEXPRESS_ENABLED ||
+      Boolean(value.ALIEXPRESS_APP_KEY && value.ALIEXPRESS_APP_SECRET && value.ALIEXPRESS_TRACKING_ID),
+    {
+      message: "Credenciais do AliExpress sao obrigatorias quando ALIEXPRESS_ENABLED=true",
+      path: ["ALIEXPRESS_APP_KEY"],
+    },
+  );
 
 const parsed = envSchema.safeParse(process.env);
 

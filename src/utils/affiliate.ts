@@ -24,7 +24,9 @@ export function addAffiliateTag(
   productUrl: string,
   tags: { amazon: string; mercadoLivre: string },
 ): string {
-  return provider === "amazon"
-    ? addAmazonAffiliateTag(productUrl, tags.amazon)
-    : addMercadoLivreAffiliateTag(productUrl, tags.mercadoLivre);
+  if (provider === "amazon") return addAmazonAffiliateTag(productUrl, tags.amazon);
+  if (provider === "mercado-livre") {
+    return addMercadoLivreAffiliateTag(productUrl, tags.mercadoLivre);
+  }
+  return productUrl;
 }
