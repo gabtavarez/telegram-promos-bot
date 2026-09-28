@@ -23,8 +23,6 @@ const envSchema = z.object({
   RUN_ON_START: booleanFromString(true),
   RUN_NOW_TOKEN: optionalString,
   CRON_SCHEDULE: optionalString,
-  SHORT_LINKS_ENABLED: booleanFromString(true),
-  SHORTENER_API_URL: z.url().default("https://tinyurl.com/api-create.php"),
   AMAZON_ENABLED: booleanFromString(false),
   ALIEXPRESS_ENABLED: booleanFromString(false),
   ALIEXPRESS_APP_KEY: optionalString,

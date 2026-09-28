@@ -32,10 +32,7 @@ async function main(): Promise<void> {
   const job = new DealsJob(
     providers,
     store,
-    new TelegramPublisher(env.TELEGRAM_BOT_TOKEN, env.CHANNEL_ID, {
-      enabled: env.SHORT_LINKS_ENABLED,
-      apiUrl: env.SHORTENER_API_URL,
-    }),
+    new TelegramPublisher(env.TELEGRAM_BOT_TOKEN, env.CHANNEL_ID),
     { amazon: env.AMAZON_TAG, mercadoLivre: env.ML_TAG },
   );
 
