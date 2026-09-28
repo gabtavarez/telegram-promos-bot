@@ -32,25 +32,36 @@ async function main(): Promise<void> {
   const job = new DealsJob(
     providers,
     store,
-    new TelegramPublisher(env.TELEGRAM_BOT_TOKEN, env.CHANNEL_ID),
+    new TelegramPublisher(env.TELEGRAM_BOT_TOKEN, env.CHANNEL_ID, {
+      enabled: env.SHORT_LINKS_ENABLED,
+      apiUrl: env.SHORTENER_API_URL,
+    }),
     { amazon: env.AMAZON_TAG, mercadoLivre: env.ML_TAG },
   );
 
   startHttpServer(env.PORT, () => job.run(), () => job.testSend(), env.RUN_NOW_TOKEN);
 
-  const intervalMs = 45 * 60 * 1_000;
-  let nextRunAt = Date.now() + intervalMs;
-  cron.schedule("* * * * *", () => {
-    const now = Date.now();
-    if (now < nextRunAt) return;
-    nextRunAt = now + intervalMs;
-    void job.run().catch((error) => console.error("Ciclo de ofertas falhou.", error));
-  });
-  console.log("Bot iniciado. Ofertas serao verificadas a cada 45 minutos.");
+  const defaultIntervalMs = 45 * 60 * 1_000;
+  let nextRunAt = Date.now() + defaultIntervalMs;
+  if (env.CRON_SCHEDULE) {
+    if (!cron.validate(env.CRON_SCHEDULE)) throw new Error(`CRON_SCHEDULE invalido: ${env.CRON_SCHEDULE}`);
+    cron.schedule(env.CRON_SCHEDULE, () => {
+      void job.run().catch((error) => console.error("Ciclo de ofertas falhou.", error));
+    });
+    console.log(`Bot iniciado. Ofertas serao verificadas pelo cron: ${env.CRON_SCHEDULE}.`);
+  } else {
+    cron.schedule("* * * * *", () => {
+      const now = Date.now();
+      if (now < nextRunAt) return;
+      nextRunAt = now + defaultIntervalMs;
+      void job.run().catch((error) => console.error("Ciclo de ofertas falhou.", error));
+    });
+    console.log("Bot iniciado. Ofertas serao verificadas a cada 45 minutos.");
+  }
 
   if (env.RUN_ON_START) {
     await job.run();
-    nextRunAt = Date.now() + intervalMs;
+    nextRunAt = Date.now() + defaultIntervalMs;
   }
 }
 
