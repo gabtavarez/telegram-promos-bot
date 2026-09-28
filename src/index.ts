@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     { amazon: env.AMAZON_TAG, mercadoLivre: env.ML_TAG },
   );
 
-  startHealthServer(env.PORT);
+  startHttpServer(env.PORT, () => job.run(), env.RUN_NOW_TOKEN);
 
   const intervalMs = 45 * 60 * 1_000;
   let nextRunAt = Date.now() + intervalMs;
@@ -44,16 +44,29 @@ async function main(): Promise<void> {
   }
 }
 
-function startHealthServer(port?: number): void {
+function startHttpServer(port: number | undefined, runNow: () => Promise<void>, runNowToken?: string): void {
   if (!port) return;
   createServer((request, response) => {
-    if (request.url === "/health") {
+    const url = new URL(request.url ?? "/", "http://localhost");
+    if (url.pathname === "/health") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end('{"status":"ok"}');
       return;
     }
+    if (url.pathname === "/run-now") {
+      if (!runNowToken || url.searchParams.get("token") !== runNowToken) {
+        response.writeHead(401, { "content-type": "application/json" });
+        response.end('{"error":"unauthorized"}');
+        return;
+      }
+
+      response.writeHead(202, { "content-type": "application/json" });
+      response.end('{"status":"started"}');
+      void runNow().catch((error) => console.error("Execucao manual falhou.", error));
+      return;
+    }
     response.writeHead(404).end();
-  }).listen(port, "0.0.0.0", () => console.log(`Health check ativo na porta ${port}.`));
+  }).listen(port, "0.0.0.0", () => console.log(`HTTP ativo na porta ${port}.`));
 }
 
 main().catch((error) => {

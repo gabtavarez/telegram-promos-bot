@@ -18,6 +18,7 @@ const envSchema = z.object({
     .default("https://www.mercadolivre.com.br/ofertas/?cat=MLB421969&category=MLB1648"),
   DATA_FILE: z.string().default("./data/posted-deals.json"),
   RUN_ON_START: booleanFromString(true),
+  RUN_NOW_TOKEN: z.string().min(12).optional(),
   AMAZON_ENABLED: booleanFromString(false),
   UPSTASH_REDIS_REST_URL: z.url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
