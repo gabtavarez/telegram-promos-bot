@@ -1,0 +1,20 @@
+const HARDWARE_TERMS = [
+  /\b(gpu|vga)\b/i,
+  /\b(rtx|gtx|radeon|geforce|rx\s?\d{3,4})\b/i,
+  /\b(placa\s+de\s+video|placa\s+de\s+vídeo|video\s+card|graphics\s+card)\b/i,
+  /\b(cpu|processador|ryzen|intel\s+core|core\s+i[3579]|xeon|athlon)\b/i,
+  /\b(ssd|nvme|m\.2|sata\s?3)\b/i,
+  /\b(mem[oó]ria\s+ram|ram\s+ddr[345]?|ddr[345]|sodimm|dimm)\b/i,
+  /\b(placa-m[aã]e|placa\s+m[aã]e|motherboard|b450|b550|b650|x570|x670|a520|h510|h610|h710|b760|z690|z790)\b/i,
+  /\b(fonte|psu|80\s?plus|atx\s+\d{3,4}w|\d{3,4}w\s+atx)\b/i,
+  /\b(gabinete|case\s+gamer|mid\s+tower|full\s+tower|mini\s+tower)\b/i,
+];
+
+const BLOCKED_TERMS = [
+  /\b(tablet|celular|smartphone|iphone|ipad|impressora|headset|fone|monitor|notebook|mouse|teclado|webcam|roteador)\b/i,
+];
+
+export function isPcHardwareDeal(title: string): boolean {
+  if (BLOCKED_TERMS.some((term) => term.test(title))) return false;
+  return HARDWARE_TERMS.some((term) => term.test(title));
+}

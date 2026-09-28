@@ -9,4 +9,5 @@ export interface Deal {
   currentPrice: number;
   previousPrice?: number;
   discountPercentage?: number;
+  couponCode?: string;
 }

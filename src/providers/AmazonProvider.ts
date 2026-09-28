@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import type { Deal } from "../types/Deal.js";
 import { calculateDiscount, parseBrlPrice } from "../utils/price.js";
 import { http } from "../utils/http.js";
+import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
 export class AmazonProvider implements AffiliateProvider {
@@ -33,6 +34,7 @@ export class AmazonProvider implements AffiliateProvider {
       );
 
       if (!href || !asin || !title || !imageUrl || !currentPrice) return;
+      if (!isPcHardwareDeal(title)) return;
 
       const originalUrl = new URL(href, "https://www.amazon.com.br");
       originalUrl.search = "";
