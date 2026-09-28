@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     { amazon: env.AMAZON_TAG, mercadoLivre: env.ML_TAG },
   );
 
-  startHttpServer(env.PORT, () => job.run(), env.RUN_NOW_TOKEN);
+  startHttpServer(env.PORT, () => job.run(), () => job.testSend(), env.RUN_NOW_TOKEN);
 
   const intervalMs = 45 * 60 * 1_000;
   let nextRunAt = Date.now() + intervalMs;
@@ -44,7 +44,12 @@ async function main(): Promise<void> {
   }
 }
 
-function startHttpServer(port: number | undefined, runNow: () => Promise<void>, runNowToken?: string): void {
+function startHttpServer(
+  port: number | undefined,
+  runNow: () => Promise<void>,
+  testSend: () => Promise<void>,
+  runNowToken?: string,
+): void {
   if (!port) return;
   createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
@@ -63,6 +68,18 @@ function startHttpServer(port: number | undefined, runNow: () => Promise<void>, 
       response.writeHead(202, { "content-type": "application/json" });
       response.end('{"status":"started"}');
       void runNow().catch((error) => console.error("Execucao manual falhou.", error));
+      return;
+    }
+    if (url.pathname === "/test-send") {
+      if (!runNowToken || url.searchParams.get("token") !== runNowToken) {
+        response.writeHead(401, { "content-type": "application/json" });
+        response.end('{"error":"unauthorized"}');
+        return;
+      }
+
+      response.writeHead(202, { "content-type": "application/json" });
+      response.end('{"status":"started"}');
+      void testSend().catch((error) => console.error("Envio de teste falhou.", error));
       return;
     }
     response.writeHead(404).end();

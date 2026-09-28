@@ -47,6 +47,33 @@ export class DealsJob {
       this.running = false;
     }
   }
+
+  async testSend(): Promise<void> {
+    const deals = await this.collectDeals();
+    const best = selectBestDeal(deals);
+    if (!best) {
+      console.log("Nenhuma oferta encontrada para teste.");
+      return;
+    }
+
+    const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
+    await this.publisher.publish(best, affiliateUrl);
+    console.log(`Oferta de teste publicada: ${best.title}`);
+  }
+
+  private async collectDeals(): Promise<Deal[]> {
+    const deals: Deal[] = [];
+    for (const provider of this.providers) {
+      try {
+        const providerDeals = await provider.getDeals();
+        deals.push(...providerDeals);
+        console.log(`${provider.name}: ${providerDeals.length} ofertas encontradas.`);
+      } catch (error) {
+        console.error(`Falha ao consultar ${provider.name}.`, error);
+      }
+    }
+    return deals;
+  }
 }
 
 export function selectBestDeal(deals: Deal[]): Deal | undefined {
