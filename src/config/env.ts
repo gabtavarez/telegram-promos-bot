@@ -7,6 +7,9 @@ const booleanFromString = (defaultValue: boolean) =>
     .default(defaultValue ? "true" : "false")
     .transform((value) => value === "true");
 
+const optionalString = z.preprocess((value) => (value === "" ? undefined : value), z.string().optional());
+const optionalUrl = z.preprocess((value) => (value === "" ? undefined : value), z.url().optional());
+
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(10),
   CHANNEL_ID: z.string().min(2),
@@ -18,10 +21,10 @@ const envSchema = z.object({
     .default("https://www.mercadolivre.com.br/ofertas/?cat=MLB421969&category=MLB1648"),
   DATA_FILE: z.string().default("./data/posted-deals.json"),
   RUN_ON_START: booleanFromString(true),
-  RUN_NOW_TOKEN: z.string().min(12).optional(),
+  RUN_NOW_TOKEN: optionalString,
   AMAZON_ENABLED: booleanFromString(false),
-  UPSTASH_REDIS_REST_URL: z.url().optional(),
-  UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
+  UPSTASH_REDIS_REST_URL: optionalUrl,
+  UPSTASH_REDIS_REST_TOKEN: optionalString,
   PORT: z.coerce.number().int().positive().optional(),
 }).refine(
   (value) => Boolean(value.UPSTASH_REDIS_REST_URL) === Boolean(value.UPSTASH_REDIS_REST_TOKEN),
