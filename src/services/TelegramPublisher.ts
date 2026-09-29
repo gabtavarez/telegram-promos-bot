@@ -63,6 +63,7 @@ export function getCategoryHashtag(title: string): string {
   const categories: Array<[RegExp, string]> = [
     [/\b(notebook|laptop|ultrabook|macbook)\b/, "#Notebook"],
     [/\b(tablet|ipad|tab\s?\d{1,2}|tab\s?[a-z]\d{1,2})\b/, "#Tablet"],
+    [/\b(smart\s*(?:tv|v)|tv|televisao|televisor|qled|oled)\b/, "#TV"],
     [/\b(rtx|gtx|radeon|geforce|gpu|placa de video)\b/, "#GPU"],
     [/\b(processador|cpu|ryzen|intel core|xeon|athlon)\b/, "#CPU"],
     [/\b(placa[- ]?mae|motherboard|b[45678]\d0|x[3567]\d0|a[356]\d0)\b/, "#PlacaMae"],

@@ -11,8 +11,11 @@ const HARDWARE_TERMS = [
   /\b(gabinete|case\s+gamer|mid\s+tower|full\s+tower|mini\s+tower|aqu[aá]rio|sff|mini-itx|mini\s+itx)\b/i,
 
   // Perifericos
-  /\b(mouse\s+gamer|mousepad|teclado\s+(?:mec[aâ]nico|60%|tkl|gamer)|headset|fone\s+gamer|microfone\s+condenser)\b/i,
+  /\b(mouse\s+gamer|mousepad|teclado\s+(?:mec[aâ]nico|magn[eé]tico|hall\s*effect|60\s*%|68\s*%|75\s*%|100\s*%|tkl|gamer)|headset|fone\s+gamer|microfone\s+condenser)(?=\s|$|[,:;()\-])/i,
   /\b(monitor\s+(?:gamer|ultrawide|144hz|165hz|240hz|alta\s+taxa|alta\s+frequ[eê]ncia)|ultrawide|144hz|165hz|240hz)\b/i,
+
+  // TVs de melhor qualidade: 4K/painel premium ou 50 polegadas ou mais
+  /^(?=.*\b(?:smart\s*(?:tv|v)|tv|televis[aã]o|televisor)\b)(?=.*(?:\b(?:4k|uhd|qled|oled|neo\s*qled|mini\s*led)\b|\b(?:5\d|[6-9]\d|1\d{2})\s*(?:["”]|pol(?:egadas?)?))).*$/i,
 
   // Organizacao e estetica de setup
   /\b(bra[cç]o\s+articulado|suporte\s+articulado\s+para\s+monitor|pegboard|painel\s+perfurado)\b/i,
@@ -27,6 +30,8 @@ const BLOCKED_TERMS = [
   /\b(l[aâ]mina|reparo\s+de\s+celular|cola\s+uv|solda|ferro\s+de\s+solda|ferramenta(?:s)?\s+de\s+reparo|telefone\s+desmontar)\b/i,
   /\b(carregador|adaptador\s+so-?dimm|adaptador|fonte\s+usb|fonte\s+alimentacao\s+usb|fonte\s+alimenta[cç][aã]o\s+usb)\b/i,
   /\b(raspberry\s*pi|raspberry|rp2040|arduino|esp32|esp8266|microcontrolador(?:es)?|pico\s+w|pico\s+rp2040)\b/i,
+  /\b(tv\s*box|controle\s+remoto\s+(?:para\s+)?tv|painel\s+para\s+tv|rack\s+para\s+tv)\b/i,
+  /^(?=.*\bsuporte\b)(?=.*\btv\b).*$/i,
 ];
 
 export function isPcHardwareDeal(title: string): boolean {

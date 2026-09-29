@@ -8,7 +8,13 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Fonte Corsair 650W 80 Plus")).toBe(true);
     expect(isPcHardwareDeal("Mouse gamer Logitech 12000 DPI")).toBe(true);
     expect(isPcHardwareDeal("Teclado mecanico TKL switch brown")).toBe(true);
+    expect(isPcHardwareDeal("Teclado magnetico Hall Effect 68% RGB")).toBe(true);
+    expect(isPcHardwareDeal("Teclado 75% sem fio RGB")).toBe(true);
+    expect(isPcHardwareDeal("Teclado 100% ABNT2")).toBe(true);
     expect(isPcHardwareDeal("Monitor gamer ultrawide 165Hz")).toBe(true);
+    expect(isPcHardwareDeal("Smart TV Samsung 50 polegadas Crystal UHD 4K")).toBe(true);
+    expect(isPcHardwareDeal("Televisor LG OLED 48 polegadas 4K")).toBe(true);
+    expect(isPcHardwareDeal("TV TCL 55 polegadas Full HD")).toBe(true);
     expect(isPcHardwareDeal("Braco articulado para monitor")).toBe(true);
     expect(isPcHardwareDeal("Fans ARGB 120mm para gabinete")).toBe(true);
     expect(isPcHardwareDeal("Luminaria de mesa ScreenBar para monitor")).toBe(true);
@@ -23,5 +29,8 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("8 pcs ultra fino ic chip cpu lamina faca placa-mae manutencao cola uv limpador removedor telefone desmontar ferramentas de reparo")).toBe(false);
     expect(isPcHardwareDeal("Liquidificador portatil para suco e smoothie")).toBe(false);
     expect(isPcHardwareDeal("Adaptador SO-DIMM para DDR4 notebook")).toBe(false);
+    expect(isPcHardwareDeal("Smart TV 32 polegadas HD")).toBe(false);
+    expect(isPcHardwareDeal("Android TV Box 4K")).toBe(false);
+    expect(isPcHardwareDeal("Suporte articulado para TV de 50 a 75 polegadas")).toBe(false);
   });
 });

@@ -39,4 +39,10 @@ describe("formatCaption", () => {
     expect(formatCaption(tablet, tablet.originalUrl)).toContain("#Tablet");
     expect(formatCaption(tablet, tablet.originalUrl)).not.toContain("#RAM");
   });
+
+  it("classifica televisores premium como TV", () => {
+    const television = { ...baseDeal, title: "Smart TV Samsung 55 polegadas QLED 4K" };
+
+    expect(formatCaption(television, television.originalUrl)).toContain("#TV");
+  });
 });
