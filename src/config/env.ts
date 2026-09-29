@@ -32,6 +32,13 @@ const envSchema = z.object({
   ALIEXPRESS_APP_KEY: optionalString,
   ALIEXPRESS_APP_SECRET: optionalString,
   ALIEXPRESS_TRACKING_ID: optionalString,
+  AWIN_COUPONS_ENABLED: booleanFromString(false),
+  AWIN_PUBLISHER_ID: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().regex(/^\d+$/).optional(),
+  ),
+  AWIN_ACCESS_TOKEN: optionalString,
+  AWIN_ADVERTISER_IDS: optionalString,
   UPSTASH_REDIS_REST_URL: optionalUrl,
   UPSTASH_REDIS_REST_TOKEN: optionalString,
   PORT: z.coerce.number().int().positive().optional(),
@@ -50,6 +57,13 @@ const envSchema = z.object({
     {
       message: "Credenciais do AliExpress sao obrigatorias quando ALIEXPRESS_ENABLED=true",
       path: ["ALIEXPRESS_APP_KEY"],
+    },
+  )
+  .refine(
+    (value) => !value.AWIN_COUPONS_ENABLED || Boolean(value.AWIN_PUBLISHER_ID && value.AWIN_ACCESS_TOKEN),
+    {
+      message: "AWIN_PUBLISHER_ID e AWIN_ACCESS_TOKEN sao obrigatorios quando AWIN_COUPONS_ENABLED=true",
+      path: ["AWIN_PUBLISHER_ID"],
     },
   );
 

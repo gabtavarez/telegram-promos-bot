@@ -11,6 +11,7 @@ import { TelegramAdminBot } from "./services/TelegramAdminBot.js";
 import type { DealsStore } from "./storage/DealsStore.js";
 import { PostedDealsStore } from "./storage/PostedDealsStore.js";
 import { UpstashPostedDealsStore } from "./storage/UpstashPostedDealsStore.js";
+import { AwinCouponProvider } from "./coupons/AwinCouponProvider.js";
 
 async function main(): Promise<void> {
   const store: DealsStore = env.UPSTASH_REDIS_REST_URL
@@ -30,11 +31,20 @@ async function main(): Promise<void> {
     );
   }
 
+  const couponProvider = env.AWIN_COUPONS_ENABLED
+    ? new AwinCouponProvider({
+        publisherId: env.AWIN_PUBLISHER_ID!,
+        accessToken: env.AWIN_ACCESS_TOKEN!,
+        advertiserIds: parseAdvertiserIds(env.AWIN_ADVERTISER_IDS),
+      })
+    : undefined;
+
   const job = new DealsJob(
     providers,
     store,
     new TelegramPublisher(env.TELEGRAM_BOT_TOKEN, env.CHANNEL_ID),
     { amazon: env.AMAZON_TAG, mercadoLivre: env.ML_TAG },
+    couponProvider,
   );
 
   if (env.TELEGRAM_ADMIN_USER_ID) {
@@ -67,6 +77,15 @@ async function main(): Promise<void> {
     await job.run();
     nextRunAt = Date.now() + defaultIntervalMs;
   }
+}
+
+function parseAdvertiserIds(value?: string): number[] | undefined {
+  if (!value) return undefined;
+  const ids = value
+    .split(",")
+    .map((item) => Number.parseInt(item.trim(), 10))
+    .filter((item) => Number.isInteger(item) && item > 0);
+  return ids.length ? ids : undefined;
 }
 
 function startHttpServer(

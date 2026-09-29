@@ -3,6 +3,8 @@ import type { DealsStore } from "../storage/DealsStore.js";
 import type { Deal } from "../types/Deal.js";
 import { addAffiliateTag } from "../utils/affiliate.js";
 import { TelegramPublisher } from "./TelegramPublisher.js";
+import type { CouponProvider } from "../coupons/CouponProvider.js";
+import { findCouponForDeal } from "../coupons/CouponMatcher.js";
 
 export class DealsJob {
   private running = false;
@@ -16,6 +18,7 @@ export class DealsJob {
     private readonly store: DealsStore,
     private readonly publisher: TelegramPublisher,
     private readonly tags: { amazon: string; mercadoLivre: string },
+    private readonly couponProvider?: CouponProvider,
   ) {}
 
   async run(ignorePause = false): Promise<JobRunResult> {
@@ -47,8 +50,9 @@ export class DealsJob {
         return "no-deal";
       }
 
+      const dealWithCoupon = await this.attachCoupon(best);
       const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
-      await this.publisher.publish(best, affiliateUrl);
+      await this.publisher.publish(dealWithCoupon, affiliateUrl);
       await this.store.markPosted(best.id, best.originalUrl);
       this.lastPublishedAt = new Date();
       this.lastPublishedTitle = best.title;
@@ -87,8 +91,9 @@ export class DealsJob {
       return;
     }
 
+    const dealWithCoupon = await this.attachCoupon(best);
     const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
-    await this.publisher.publish(best, affiliateUrl);
+    await this.publisher.publish(dealWithCoupon, affiliateUrl);
     console.log(`Oferta de teste publicada: ${best.title}`);
   }
 
@@ -104,6 +109,13 @@ export class DealsJob {
       }
     }
     return deals;
+  }
+
+  private async attachCoupon(deal: Deal): Promise<Deal> {
+    if (deal.couponCode || !this.couponProvider) return deal;
+    const coupons = await this.couponProvider.getActiveCoupons();
+    const coupon = findCouponForDeal(deal, coupons);
+    return coupon ? { ...deal, couponCode: coupon.code } : deal;
   }
 }
 
