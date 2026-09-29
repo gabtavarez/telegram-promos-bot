@@ -26,7 +26,7 @@ As URLs das páginas monitoradas (por padrão, ofertas de informática/hardware)
 
 ## Comandos
 
-No chat privado com o bot, o administrador pode usar `/oferta`, `/status`, `/pausar` e `/retomar`.
+No chat privado com o bot, o administrador pode usar `/oferta`, `/status`, `/buscar SSD`, `/cupons`, `/pausar` e `/retomar`.
 
 ```bash
 npm run dev       # desenvolvimento

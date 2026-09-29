@@ -5,6 +5,7 @@ import { addAffiliateTag } from "../utils/affiliate.js";
 import { TelegramPublisher } from "./TelegramPublisher.js";
 import type { CouponProvider } from "../coupons/CouponProvider.js";
 import { findCouponForDeal } from "../coupons/CouponMatcher.js";
+import type { Coupon } from "../coupons/CouponProvider.js";
 
 export class DealsJob {
   private running = false;
@@ -83,6 +84,26 @@ export class DealsJob {
     };
   }
 
+  async getActiveCoupons(): Promise<Coupon[]> {
+    return this.couponProvider?.getActiveCoupons() ?? [];
+  }
+
+  async search(query: string, limit = 3): Promise<DealSearchResult[]> {
+    const deals = (await this.collectDeals())
+      .filter((deal) => matchesDealSearch(deal, query))
+      .sort(compareDeals)
+      .slice(0, limit);
+    const results: DealSearchResult[] = [];
+
+    for (const deal of deals) {
+      results.push({
+        deal: await this.attachCoupon(deal),
+        affiliateUrl: addAffiliateTag(deal.provider, deal.originalUrl, this.tags),
+      });
+    }
+    return results;
+  }
+
   async testSend(): Promise<void> {
     const deals = await this.collectDeals();
     const best = selectBestDeal(deals);
@@ -130,10 +151,28 @@ export interface DealsJobStatus {
   lastPublishedTitle?: string;
 }
 
+export interface DealSearchResult {
+  deal: Deal;
+  affiliateUrl: string;
+}
+
 export function selectBestDeal(deals: Deal[]): Deal | undefined {
-  return [...deals].sort((a, b) => {
-    const discountDifference = (b.discountPercentage ?? 0) - (a.discountPercentage ?? 0);
-    if (discountDifference !== 0) return discountDifference;
-    return a.currentPrice - b.currentPrice;
-  })[0];
+  return [...deals].sort(compareDeals)[0];
+}
+
+export function matchesDealSearch(deal: Deal, query: string): boolean {
+  const terms = normalizeSearch(query).split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return false;
+  const title = normalizeSearch(deal.title);
+  return terms.every((term) => title.includes(term));
+}
+
+function compareDeals(a: Deal, b: Deal): number {
+  const discountDifference = (b.discountPercentage ?? 0) - (a.discountPercentage ?? 0);
+  if (discountDifference !== 0) return discountDifference;
+  return a.currentPrice - b.currentPrice;
+}
+
+function normalizeSearch(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
