@@ -1,5 +1,11 @@
 import type { ProviderName } from "../types/Deal.js";
 
+export interface AffiliateTags {
+  amazon: string;
+  mercadoLivre: string;
+  kabum?: { advertiserId: string; publisherId: string; clickRef?: string };
+}
+
 function safeUrl(rawUrl: string): URL {
   return new URL(rawUrl);
 }
@@ -19,14 +25,27 @@ export function addMercadoLivreAffiliateTag(productUrl: string, tracking: string
   return url.toString();
 }
 
+export function addAwinAffiliateTag(
+  productUrl: string,
+  options: { advertiserId: string; publisherId: string; clickRef?: string },
+): string {
+  const url = new URL("https://www.awin1.com/cread.php");
+  url.searchParams.set("awinmid", options.advertiserId);
+  url.searchParams.set("awinaffid", options.publisherId);
+  if (options.clickRef) url.searchParams.set("clickref", options.clickRef);
+  url.searchParams.set("ued", productUrl);
+  return url.toString();
+}
+
 export function addAffiliateTag(
   provider: ProviderName,
   productUrl: string,
-  tags: { amazon: string; mercadoLivre: string },
+  tags: AffiliateTags,
 ): string {
   if (provider === "amazon") return addAmazonAffiliateTag(productUrl, tags.amazon);
   if (provider === "mercado-livre") {
     return addMercadoLivreAffiliateTag(productUrl, tags.mercadoLivre);
   }
+  if (provider === "kabum" && tags.kabum) return addAwinAffiliateTag(productUrl, tags.kabum);
   return productUrl;
 }

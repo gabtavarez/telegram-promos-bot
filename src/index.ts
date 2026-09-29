@@ -5,6 +5,7 @@ import type { AffiliateProvider } from "./providers/AffiliateProvider.js";
 import { AmazonProvider } from "./providers/AmazonProvider.js";
 import { MercadoLivreProvider } from "./providers/MercadoLivreProvider.js";
 import { AliExpressProvider } from "./providers/aliexpress.provider.js";
+import { KabumProvider } from "./providers/KabumProvider.js";
 import { DealsJob } from "./services/DealsJob.js";
 import { TelegramPublisher } from "./services/TelegramPublisher.js";
 import { TelegramAdminBot } from "./services/TelegramAdminBot.js";
@@ -21,6 +22,7 @@ async function main(): Promise<void> {
 
   const providers: AffiliateProvider[] = [new MercadoLivreProvider(env.ML_DEALS_URL)];
   if (env.AMAZON_ENABLED) providers.push(new AmazonProvider(env.AMAZON_DEALS_URL));
+  if (env.KABUM_ENABLED) providers.push(new KabumProvider(env.KABUM_DEALS_URL));
   if (env.ALIEXPRESS_ENABLED) {
     providers.push(
       new AliExpressProvider({
@@ -43,7 +45,17 @@ async function main(): Promise<void> {
     providers,
     store,
     new TelegramPublisher(env.TELEGRAM_BOT_TOKEN, env.CHANNEL_ID),
-    { amazon: env.AMAZON_TAG, mercadoLivre: env.ML_TAG },
+    {
+      amazon: env.AMAZON_TAG,
+      mercadoLivre: env.ML_TAG,
+      kabum: env.KABUM_ENABLED
+        ? {
+            advertiserId: env.KABUM_AWIN_ADVERTISER_ID!,
+            publisherId: env.AWIN_PUBLISHER_ID!,
+            clickRef: env.KABUM_CLICK_REF,
+          }
+        : undefined,
+    },
     couponProvider,
   );
 

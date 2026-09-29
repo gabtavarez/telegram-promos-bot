@@ -1,4 +1,4 @@
-export type ProviderName = "amazon" | "mercado-livre" | "aliexpress";
+export type ProviderName = "amazon" | "mercado-livre" | "aliexpress" | "kabum";
 
 export interface Deal {
   id: string;

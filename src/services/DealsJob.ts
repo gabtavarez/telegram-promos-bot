@@ -2,6 +2,7 @@ import type { AffiliateProvider } from "../providers/AffiliateProvider.js";
 import type { DealsStore } from "../storage/DealsStore.js";
 import type { Deal } from "../types/Deal.js";
 import { addAffiliateTag } from "../utils/affiliate.js";
+import type { AffiliateTags } from "../utils/affiliate.js";
 import { TelegramPublisher } from "./TelegramPublisher.js";
 import type { CouponProvider } from "../coupons/CouponProvider.js";
 import { findCouponForDeal } from "../coupons/CouponMatcher.js";
@@ -18,7 +19,7 @@ export class DealsJob {
     private readonly providers: AffiliateProvider[],
     private readonly store: DealsStore,
     private readonly publisher: TelegramPublisher,
-    private readonly tags: { amazon: string; mercadoLivre: string },
+    private readonly tags: AffiliateTags,
     private readonly couponProvider?: CouponProvider,
   ) {}
 

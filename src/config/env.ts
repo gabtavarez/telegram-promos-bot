@@ -32,6 +32,13 @@ const envSchema = z.object({
   ALIEXPRESS_APP_KEY: optionalString,
   ALIEXPRESS_APP_SECRET: optionalString,
   ALIEXPRESS_TRACKING_ID: optionalString,
+  KABUM_ENABLED: booleanFromString(false),
+  KABUM_DEALS_URL: z.url().default("https://www.kabum.com.br/ofertas"),
+  KABUM_AWIN_ADVERTISER_ID: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().regex(/^\d+$/).optional(),
+  ),
+  KABUM_CLICK_REF: z.string().default("telegram_canal"),
   AWIN_COUPONS_ENABLED: booleanFromString(false),
   AWIN_PUBLISHER_ID: z.preprocess(
     (value) => (value === "" ? undefined : value),
@@ -64,6 +71,13 @@ const envSchema = z.object({
     {
       message: "AWIN_PUBLISHER_ID e AWIN_ACCESS_TOKEN sao obrigatorios quando AWIN_COUPONS_ENABLED=true",
       path: ["AWIN_PUBLISHER_ID"],
+    },
+  )
+  .refine(
+    (value) => !value.KABUM_ENABLED || Boolean(value.KABUM_AWIN_ADVERTISER_ID && value.AWIN_PUBLISHER_ID),
+    {
+      message: "KABUM_AWIN_ADVERTISER_ID e AWIN_PUBLISHER_ID sao obrigatorios quando KABUM_ENABLED=true",
+      path: ["KABUM_AWIN_ADVERTISER_ID"],
     },
   );
 
