@@ -28,6 +28,8 @@ const BLOCKED_TERMS = [
   /\b(tablet|celular|smartphone|iphone|ipad|impressora|webcam|roteador)\b/i,
   /\b(liquidificador|suco|smoothie|mosquito|inseto|insetos|praga|pragas|fly\s+bug|lampada|l[aâ]mpada|led\s+luz|armadilha|assassino\s+de\s+insetos)\b/i,
   /\b(l[aâ]mina|reparo\s+de\s+celular|cola\s+uv|solda|ferro\s+de\s+solda|ferramenta(?:s)?\s+de\s+reparo|telefone\s+desmontar)\b/i,
+  /\b(filtro\s+de\s+poeira|dust\s+filter|mesh\s+shield|tela\s+de\s+poeira)\b/i,
+  /\b(testador\s+de\s+indut[aâ]ncia|inductance\s+tester|testador\s+de\s+bobinas?|detector\s+de\s+falhas?|ferramenta(?:s)?\s+de\s+manuten[cç][aã]o)\b/i,
   /\b(carregador|adaptador\s+so-?dimm|adaptador|fonte\s+usb|fonte\s+alimentacao\s+usb|fonte\s+alimenta[cç][aã]o\s+usb)\b/i,
   /\b(raspberry\s*pi|raspberry|rp2040|arduino|esp32|esp8266|microcontrolador(?:es)?|pico\s+w|pico\s+rp2040)\b/i,
   /\b(tv\s*box|controle\s+remoto\s+(?:para\s+)?tv|painel\s+para\s+tv|rack\s+para\s+tv)\b/i,

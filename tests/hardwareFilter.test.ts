@@ -29,6 +29,8 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("8 pcs ultra fino ic chip cpu lamina faca placa-mae manutencao cola uv limpador removedor telefone desmontar ferramentas de reparo")).toBe(false);
     expect(isPcHardwareDeal("Liquidificador portatil para suco e smoothie")).toBe(false);
     expect(isPcHardwareDeal("Adaptador SO-DIMM para DDR4 notebook")).toBe(false);
+    expect(isPcHardwareDeal("Filtro de Poeira Magnetico com Rede de Malha para Gabinete de PC e Fonte de Alimentacao")).toBe(false);
+    expect(isPcHardwareDeal("Testador de Indutancia W01 Testador de Bobinas de Placa-Mae Detector Rapido de Falhas")).toBe(false);
     expect(isPcHardwareDeal("Smart TV 32 polegadas HD")).toBe(false);
     expect(isPcHardwareDeal("Android TV Box 4K")).toBe(false);
     expect(isPcHardwareDeal("Suporte articulado para TV de 50 a 75 polegadas")).toBe(false);
