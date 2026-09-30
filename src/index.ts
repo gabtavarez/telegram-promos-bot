@@ -6,6 +6,7 @@ import { AmazonProvider } from "./providers/AmazonProvider.js";
 import { MercadoLivreProvider } from "./providers/MercadoLivreProvider.js";
 import { AliExpressProvider } from "./providers/aliexpress.provider.js";
 import { KabumProvider } from "./providers/KabumProvider.js";
+import { ShopeeProvider } from "./providers/ShopeeProvider.js";
 import { DealsJob } from "./services/DealsJob.js";
 import { TelegramPublisher } from "./services/TelegramPublisher.js";
 import { TelegramAdminBot } from "./services/TelegramAdminBot.js";
@@ -22,7 +23,24 @@ async function main(): Promise<void> {
 
   const providers: AffiliateProvider[] = [new MercadoLivreProvider(env.ML_DEALS_URL)];
   if (env.AMAZON_ENABLED) providers.push(new AmazonProvider(env.AMAZON_DEALS_URL));
-  if (env.KABUM_ENABLED) providers.push(new KabumProvider(env.KABUM_DEALS_URL));
+  if (env.KABUM_ENABLED) {
+    providers.push(
+      new KabumProvider({
+        publisherId: env.AWIN_PUBLISHER_ID!,
+        advertiserId: env.KABUM_AWIN_ADVERTISER_ID!,
+        accessToken: env.AWIN_ACCESS_TOKEN!,
+        locale: env.KABUM_AWIN_FEED_LOCALE,
+      }),
+    );
+  }
+  if (env.SHOPEE_ENABLED) {
+    providers.push(
+      new ShopeeProvider({
+        appId: env.SHOPEE_APP_ID!,
+        appSecret: env.SHOPEE_APP_SECRET!,
+      }),
+    );
+  }
   if (env.ALIEXPRESS_ENABLED) {
     providers.push(
       new AliExpressProvider({
@@ -67,7 +85,7 @@ async function main(): Promise<void> {
 
   startHttpServer(env.PORT, () => job.run(), () => job.testSend(), env.RUN_NOW_TOKEN);
 
-  const defaultIntervalMs = 45 * 60 * 1_000;
+  const defaultIntervalMs = 10 * 60 * 1_000;
   let nextRunAt = Date.now() + defaultIntervalMs;
   if (env.CRON_SCHEDULE) {
     if (!cron.validate(env.CRON_SCHEDULE)) throw new Error(`CRON_SCHEDULE invalido: ${env.CRON_SCHEDULE}`);
@@ -82,7 +100,7 @@ async function main(): Promise<void> {
       nextRunAt = now + defaultIntervalMs;
       void job.run().catch((error) => console.error("Ciclo de ofertas falhou.", error));
     });
-    console.log("Bot iniciado. Ofertas serao verificadas a cada 45 minutos.");
+    console.log("Bot iniciado. Ofertas serao verificadas a cada 10 minutos.");
   }
 
   if (env.RUN_ON_START) {

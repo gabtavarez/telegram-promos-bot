@@ -6,6 +6,7 @@ const httpMocks = vi.hoisted(() => ({
 
 const axiosMocks = vi.hoisted(() => ({
   create: vi.fn(),
+  get: vi.fn(),
   post: vi.fn(),
   isAxiosError: vi.fn(),
 }));
@@ -27,11 +28,12 @@ import { AmazonProvider } from "../src/providers/AmazonProvider.js";
 import { AliExpressProvider } from "../src/providers/aliexpress.provider.js";
 import { KabumProvider } from "../src/providers/KabumProvider.js";
 import { MercadoLivreProvider } from "../src/providers/MercadoLivreProvider.js";
+import { ShopeeProvider } from "../src/providers/ShopeeProvider.js";
 
 describe("provider delivery checks", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    axiosMocks.create.mockReturnValue({ post: axiosMocks.post });
+    axiosMocks.create.mockReturnValue({ get: axiosMocks.get, post: axiosMocks.post });
     axiosMocks.isAxiosError.mockReturnValue(false);
   });
 
@@ -101,27 +103,35 @@ describe("provider delivery checks", () => {
   });
 
   it("extracts only quality Kabum deals", async () => {
-    httpMocks.get.mockResolvedValue({
-      data: `
-        <article>
-          <a href="/produto/123456/placa-de-video-rtx-4060">
-            <h2 class="productName">Placa de Video Asus RTX 4060 Dual 8GB GDDR6</h2>
-            <img src="https://example.com/rtx4060.jpg" />
-            <span>R$ 2.399,90</span>
-            <strong>R$ 1.899,90</strong>
-          </a>
-        </article>
-        <article>
-          <a href="/produto/999999/fan-4010">
-            <h2 class="productName">4010 30mm DC 12V Cooling Fan Brushless Motor 2PIN</h2>
-            <img src="https://example.com/fan.jpg" />
-            <strong>R$ 13,69</strong>
-          </a>
-        </article>
-      `,
+    axiosMocks.get.mockResolvedValue({
+      data: [
+        JSON.stringify({
+          id: "123456",
+          title: "Placa de Video Asus RTX 4060 Dual 8GB GDDR6",
+          link: "https://www.kabum.com.br/produto/123456/placa-de-video-rtx-4060",
+          image_link: "https://example.com/rtx4060.jpg",
+          price: "2399.90 BRL",
+          sale_price: "1899.90 BRL",
+          availability: "in_stock",
+          condition: "new",
+        }),
+        JSON.stringify({
+          id: "999999",
+          title: "4010 30mm DC 12V Cooling Fan Brushless Motor 2PIN",
+          link: "https://www.kabum.com.br/produto/999999/fan-4010",
+          image_link: "https://example.com/fan.jpg",
+          price: "13.69 BRL",
+          availability: "in_stock",
+        }),
+      ].join("\n"),
     });
 
-    const deals = await new KabumProvider("https://kabum.example/ofertas").getDeals();
+    const deals = await new KabumProvider({
+      publisherId: "3108044",
+      advertiserId: "17729",
+      accessToken: "awin-token",
+      locale: "pt_BR",
+    }).getDeals();
 
     expect(deals).toHaveLength(1);
     expect(deals[0]).toMatchObject({
@@ -130,6 +140,51 @@ describe("provider delivery checks", () => {
       currentPrice: 1899.9,
     });
     expect(deals[0]?.originalUrl).toBe("https://www.kabum.com.br/produto/123456/placa-de-video-rtx-4060");
+  });
+
+  it("extracts only quality Shopee deals with tracked offer links", async () => {
+    axiosMocks.post.mockResolvedValue({
+      data: {
+        data: {
+          productOfferV2: {
+            nodes: [
+              {
+                itemId: "555",
+                shopId: "777",
+                productName: "Processador AMD Ryzen 5 5600 AM4",
+                priceMin: "699.90",
+                imageUrl: "https://example.com/ryzen.jpg",
+                offerLink: "https://s.shopee.com.br/abc123",
+                priceDiscountRate: 30,
+              },
+              {
+                itemId: "999",
+                shopId: "777",
+                productName: "Liquidificador para smoothie com lâmina",
+                priceMin: "99.90",
+                imageUrl: "https://example.com/blender.jpg",
+                offerLink: "https://s.shopee.com.br/bad123",
+                priceDiscountRate: 50,
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const deals = await new ShopeeProvider({ appId: "app-id", appSecret: "secret" }).getDeals();
+
+    expect(deals).toHaveLength(1);
+    expect(deals[0]).toMatchObject({
+      id: "shopee:777:555",
+      provider: "shopee",
+      originalUrl: "https://s.shopee.com.br/abc123",
+      currentPrice: 699.9,
+      discountPercentage: 30,
+    });
+    expect(axiosMocks.post.mock.calls[0]?.[2]?.headers.Authorization).toMatch(
+      /^SHA256 Credential=app-id, Timestamp=\d+, Signature=[a-f0-9]{64}$/,
+    );
   });
 
   it("extracts only quality AliExpress deals with affiliate links", async () => {
