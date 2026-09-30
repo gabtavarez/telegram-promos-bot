@@ -5,8 +5,23 @@ import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
 const API_URL = "https://open-api.affiliate.shopee.com.br/graphql";
-const PRODUCT_QUERY = `{
-  productOfferV2 {
+const HARDWARE_KEYWORDS = [
+  "placa de video",
+  "processador ryzen",
+  "ssd nvme",
+  "memoria ram ddr5",
+  "placa mae",
+  "fonte 80 plus",
+  "gabinete gamer",
+  "teclado mecanico",
+  "mouse gamer",
+  "headset gamer",
+  "monitor gamer",
+  "smart tv 4k 50",
+];
+
+const productQuery = (keyword: string) => `{
+  productOfferV2(keyword: ${JSON.stringify(keyword)}, listType: 0, sortType: 2, page: 1, limit: 20) {
     nodes {
       productName
       itemId
@@ -62,28 +77,23 @@ export class ShopeeProvider implements AffiliateProvider {
 
   async getDeals(): Promise<Deal[]> {
     try {
-      const payload = JSON.stringify({ query: PRODUCT_QUERY });
-      const timestamp = Math.ceil(Date.now() / 1_000);
-      const signature = createHash("sha256")
-        .update(`${this.config.appId}${timestamp}${payload}${this.config.appSecret}`, "utf8")
-        .digest("hex");
-      const authorization =
-        `SHA256 Credential=${this.config.appId}, Timestamp=${timestamp}, Signature=${signature}`;
-      const { data } = await this.client.post<ShopeeResponse>("", payload, {
-        headers: { Authorization: authorization },
-      });
+      const results = await Promise.allSettled(HARDWARE_KEYWORDS.map((keyword) => this.queryProducts(keyword)));
+      const failed = results.filter((result) => result.status === "rejected");
+      if (failed.length > 0) console.warn(`Shopee: ${failed.length} busca(s) parcial(is) falharam.`);
 
-      if (data.errors?.length) {
-        throw new Error(data.errors.map((error) => error.extensions?.message ?? error.message).join("; "));
-      }
-
-      const products = data.data?.productOfferV2?.nodes ?? [];
+      const products = [
+        ...new Map(
+          results
+            .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+            .map((product) => [`${product.shopId ?? "shop"}:${product.itemId}`, product]),
+        ).values(),
+      ];
       const deals = products.flatMap((product): Deal[] => {
         const id = product.itemId;
         const title = product.productName?.trim();
-        const currentPrice = parsePrice(product.priceMin ?? product.price);
+        const currentPrice = parsePrice(product.priceMin) ?? parsePrice(product.price);
         const imageUrl = normalizeUrl(product.imageUrl);
-        const originalUrl = normalizeShopeeUrl(product.offerLink ?? product.productLink);
+        const originalUrl = normalizeShopeeUrl(product.offerLink) ?? normalizeShopeeUrl(product.productLink);
         const discountPercentage = parseDiscount(product.priceDiscountRate);
         const previousPrice = currentPrice && discountPercentage
           ? roundPrice(currentPrice / (1 - discountPercentage / 100))
@@ -104,6 +114,7 @@ export class ShopeeProvider implements AffiliateProvider {
         }];
       });
 
+      console.log(`Shopee API: ${products.length} produto(s) recebidos; ${deals.length} aprovado(s) pelo filtro.`);
       return [...new Map(deals.map((deal) => [deal.id, deal])).values()];
     } catch (error) {
       const message = axios.isAxiosError(error)
@@ -114,6 +125,24 @@ export class ShopeeProvider implements AffiliateProvider {
       console.error(`Falha na API da Shopee: ${message}`);
       return [];
     }
+  }
+
+  private async queryProducts(keyword: string): Promise<ShopeeProduct[]> {
+    const payload = JSON.stringify({ query: productQuery(keyword) });
+    const timestamp = Math.ceil(Date.now() / 1_000);
+    const signature = createHash("sha256")
+      .update(`${this.config.appId}${timestamp}${payload}${this.config.appSecret}`, "utf8")
+      .digest("hex");
+    const authorization =
+      `SHA256 Credential=${this.config.appId}, Timestamp=${timestamp}, Signature=${signature}`;
+    const { data } = await this.client.post<ShopeeResponse>("", payload, {
+      headers: { Authorization: authorization },
+    });
+
+    if (data.errors?.length) {
+      throw new Error(data.errors.map((error) => error.extensions?.message ?? error.message).join("; "));
+    }
+    return data.data?.productOfferV2?.nodes ?? [];
   }
 }
 

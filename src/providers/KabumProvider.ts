@@ -36,7 +36,7 @@ export class KabumProvider implements AffiliateProvider {
       baseURL: "https://api.awin.com",
       timeout: 30_000,
       maxContentLength: 50 * 1024 * 1024,
-      headers: { Authorization: `Bearer ${config.accessToken}`, Accept: "application/x-ndjson,text/plain" },
+      headers: { Authorization: `Bearer ${config.accessToken}` },
       responseType: "text",
     });
   }
