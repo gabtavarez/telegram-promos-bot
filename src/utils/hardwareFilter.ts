@@ -28,6 +28,10 @@ const HARDWARE_TERMS = [
 ];
 
 const BLOCKED_TERMS = [
+  /\bmancer\b/i,
+  /\b(?:pc|computador|desktop)\s+(?:gamer|completo|montado|pronto)\b/i,
+  /\b(?:pc|computador|desktop)\s+(?:amd|intel|ryzen|core\s+i[3579])\b/i,
+  /\bkit\s+(?:pc|computador)\s+(?:gamer|completo|montado)\b/i,
   /\b(tablet|celular|smartphone|iphone|ipad|impressora|webcam|roteador)\b/i,
   /\b(liquidificador|suco|smoothie|mosquito|inseto|insetos|praga|pragas|fly\s+bug|lampada|l[aâ]mpada|led\s+luz|armadilha|assassino\s+de\s+insetos)\b/i,
   /\b(l[aâ]mina|reparo\s+de\s+celular|cola\s+uv|solda|ferro\s+de\s+solda|ferramenta(?:s)?\s+de\s+reparo|telefone\s+desmontar)\b/i,

@@ -20,6 +20,17 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Luminaria de mesa ScreenBar para monitor")).toBe(true);
   });
 
+  it("blocks Mancer products and complete computers", () => {
+    expect(isPcHardwareDeal("Gabinete Gamer Mancer Narok Mid-Tower RGB")).toBe(false);
+    expect(isPcHardwareDeal("PC Gamer Ryzen 5 5600G 16GB RAM SSD NVMe 1TB")).toBe(false);
+    expect(isPcHardwareDeal("Computador completo Intel Core i5 16GB SSD 512GB")).toBe(false);
+    expect(isPcHardwareDeal("Desktop montado Ryzen 7 5700G 32GB DDR4")).toBe(false);
+  });
+
+  it("keeps quality standalone cases", () => {
+    expect(isPcHardwareDeal("Gabinete Gamer Corsair 4000D Airflow Mid-Tower ATX")).toBe(true);
+  });
+
   it("rejects unrelated electronics", () => {
     expect(isPcHardwareDeal("Tablet Android 14 24GB RAM")).toBe(false);
     expect(isPcHardwareDeal("Impressora Canon Pixma")).toBe(false);
