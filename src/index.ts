@@ -23,7 +23,7 @@ async function main(): Promise<void> {
 
   const providers: AffiliateProvider[] = [new MercadoLivreProvider(env.ML_DEALS_URL)];
   if (env.AMAZON_ENABLED) providers.push(new AmazonProvider(env.AMAZON_DEALS_URL));
-  if (env.KABUM_ENABLED) {
+  if (env.KABUM_ENABLED && env.AWIN_ACCESS_TOKEN) {
     providers.push(
       new KabumProvider({
         publisherId: env.AWIN_PUBLISHER_ID!,
@@ -32,6 +32,8 @@ async function main(): Promise<void> {
         locale: env.KABUM_AWIN_FEED_LOCALE,
       }),
     );
+  } else if (env.KABUM_ENABLED) {
+    console.warn("Kabum desativada neste ciclo: AWIN_ACCESS_TOKEN nao configurado.");
   }
   if (env.SHOPEE_ENABLED) {
     providers.push(

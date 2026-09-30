@@ -84,12 +84,9 @@ const envSchema = z.object({
     },
   )
   .refine(
-    (value) =>
-      !value.KABUM_ENABLED ||
-      Boolean(value.KABUM_AWIN_ADVERTISER_ID && value.AWIN_PUBLISHER_ID && value.AWIN_ACCESS_TOKEN),
+    (value) => !value.KABUM_ENABLED || Boolean(value.KABUM_AWIN_ADVERTISER_ID && value.AWIN_PUBLISHER_ID),
     {
-      message:
-        "KABUM_AWIN_ADVERTISER_ID, AWIN_PUBLISHER_ID e AWIN_ACCESS_TOKEN sao obrigatorios quando KABUM_ENABLED=true",
+      message: "KABUM_AWIN_ADVERTISER_ID e AWIN_PUBLISHER_ID sao obrigatorios quando KABUM_ENABLED=true",
       path: ["KABUM_AWIN_ADVERTISER_ID"],
     },
   );
