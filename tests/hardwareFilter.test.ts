@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPcHardwareDeal } from "../src/utils/hardwareFilter.js";
+import { getHardwareQualityScore, isPcHardwareDeal } from "../src/utils/hardwareFilter.js";
 
 describe("hardware filter", () => {
   it("accepts PC hardware categories", () => {
@@ -13,8 +13,8 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Teclado 100% ABNT2")).toBe(true);
     expect(isPcHardwareDeal("Monitor gamer ultrawide 165Hz")).toBe(true);
     expect(isPcHardwareDeal("Smart TV Samsung 50 polegadas Crystal UHD 4K")).toBe(true);
-    expect(isPcHardwareDeal("Televisor LG OLED 48 polegadas 4K")).toBe(true);
-    expect(isPcHardwareDeal("TV TCL 55 polegadas Full HD")).toBe(true);
+    expect(isPcHardwareDeal("Televisor LG OLED 55 polegadas 4K")).toBe(true);
+    expect(isPcHardwareDeal("Notebook Vaio Ryzen 7 5825U 16GB RAM 512GB SSD Wi-Fi 6")).toBe(true);
     expect(isPcHardwareDeal("Braco articulado para monitor")).toBe(true);
     expect(isPcHardwareDeal("Fans ARGB 120mm para gabinete")).toBe(true);
     expect(isPcHardwareDeal("Luminaria de mesa ScreenBar para monitor")).toBe(true);
@@ -32,7 +32,21 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Filtro de Poeira Magnetico com Rede de Malha para Gabinete de PC e Fonte de Alimentacao")).toBe(false);
     expect(isPcHardwareDeal("Testador de Indutancia W01 Testador de Bobinas de Placa-Mae Detector Rapido de Falhas")).toBe(false);
     expect(isPcHardwareDeal("Smart TV 32 polegadas HD")).toBe(false);
+    expect(isPcHardwareDeal("TV TCL 55 polegadas Full HD")).toBe(false);
     expect(isPcHardwareDeal("Android TV Box 4K")).toBe(false);
     expect(isPcHardwareDeal("Suporte articulado para TV de 50 a 75 polegadas")).toBe(false);
+    expect(isPcHardwareDeal("4010 12025 8010 30mm DC 5V 12V Cooling Fan Brushless Motor Case Quiet 2PIN")).toBe(false);
+    expect(isPcHardwareDeal("Placa de video GT 710 2GB DDR3 HDMI")).toBe(false);
+    expect(isPcHardwareDeal("Notebook Intel Celeron 4GB RAM 128GB eMMC")).toBe(false);
+    expect(isPcHardwareDeal("Fonte ATX 300W Real Bivolt Chaveada")).toBe(false);
+    expect(isPcHardwareDeal("Mouse sem fio escritorio silencioso")).toBe(false);
+    expect(isPcHardwareDeal("Fone gamer RGB generico")).toBe(false);
+  });
+
+  it("scores curated products above weak products", () => {
+    expect(getHardwareQualityScore("RTX 4060 Asus Dual 8GB GDDR6")).toBeGreaterThan(
+      getHardwareQualityScore("Placa de video GT 710 2GB DDR3"),
+    );
+    expect(getHardwareQualityScore("SSD NVMe Kingston 1TB M.2")).toBeGreaterThan(0);
   });
 });
