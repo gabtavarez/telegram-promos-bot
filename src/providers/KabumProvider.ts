@@ -54,6 +54,10 @@ export class KabumProvider implements AffiliateProvider {
   async getDeals(): Promise<Deal[]> {
     try {
       const records = await this.fetchFeedRecords();
+      const columns = records[0] ? Object.keys(records[0]) : [];
+      if (columns.length) {
+        console.log(`Kabum/Awin (${this.feedSource}): colunas do feed: ${columns.slice(0, 30).join(", ")}`);
+      }
       const stats: KabumFeedStats = {
         records: records.length,
         withRequiredFields: 0,
@@ -159,11 +163,11 @@ function flattenProduct(record: AwinFeedRecord): AwinFeedProduct {
   const sections = Object.values(record).filter(isRecord);
   const flat = Object.assign({}, ...sections, record) as Record<string, unknown>;
   return {
-    id: pickValue(flat, "aw_product_id", "merchant_product_id", "id"),
-    title: pickValue(flat, "product_name", "title"),
-    link: pickValue(flat, "aw_deep_link", "link", "merchant_deep_link"),
-    image_link: pickValue(flat, "merchant_image_url", "aw_image_url", "image_link"),
-    price: pickValue(flat, "search_price", "display_price", "store_price", "price"),
+    id: pickValue(flat, "aw_product_id", "merchant_product_id", "product_id", "id"),
+    title: pickValue(flat, "product_name", "title", "name", "nome"),
+    link: pickValue(flat, "aw_deep_link", "deep_link", "deeplink", "link", "merchant_deep_link", "product_url", "url"),
+    image_link: pickValue(flat, "merchant_image_url", "aw_image_url", "image_link", "image_url", "large_image", "picture_url"),
+    price: pickValue(flat, "search_price", "display_price", "store_price", "price", "product_price", "sale_price"),
     sale_price: pickValue(flat, "store_price", "sale_price"),
     availability: pickValue(flat, "in_stock", "stock_status", "availability"),
     condition: pickValue(flat, "condition"),
@@ -187,18 +191,32 @@ function parseFeedPrice(value?: string | number): number | undefined {
 }
 
 function parseCsvFeed(data: string): AwinFeedRecord[] {
-  const rows = parseCsvRows(data.replace(/^\uFEFF/, ""));
+  const cleaned = data.replace(/^\uFEFF/, "");
+  const delimiter = detectCsvDelimiter(cleaned);
+  const rows = parseCsvRows(cleaned, delimiter);
   const [header, ...records] = rows;
   if (!header) return [];
 
   return records
     .filter((row) => row.some((value) => value.trim()))
     .map((row) =>
-      Object.fromEntries(header.map((column, index) => [column.trim(), row[index]?.trim() ?? ""])) as AwinFeedRecord,
+      Object.fromEntries(header.map((column, index) => [normalizeColumn(column), row[index]?.trim() ?? ""])) as AwinFeedRecord,
     );
 }
 
-function parseCsvRows(data: string): string[][] {
+function detectCsvDelimiter(data: string): string {
+  const firstLine = data.split(/\r?\n/, 1)[0] ?? "";
+  const delimiters = [",", ";", "|", "\t"];
+  return delimiters.reduce((best, delimiter) =>
+    countOccurrences(firstLine, delimiter) > countOccurrences(firstLine, best) ? delimiter : best,
+  ",");
+}
+
+function countOccurrences(value: string, search: string): number {
+  return value.split(search).length - 1;
+}
+
+function parseCsvRows(data: string, delimiter: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -218,7 +236,7 @@ function parseCsvRows(data: string): string[][] {
       continue;
     }
 
-    if (char === "," && !quoted) {
+    if (char === delimiter && !quoted) {
       row.push(field);
       field = "";
       continue;
@@ -251,6 +269,10 @@ function pickValue(record: Record<string, unknown>, ...keys: string[]): string |
     if (typeof value === "number" && Number.isFinite(value)) return String(value);
   }
   return undefined;
+}
+
+function normalizeColumn(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "_");
 }
 
 function normalizeText(value?: string): string {
