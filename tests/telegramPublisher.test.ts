@@ -12,21 +12,13 @@ const baseDeal: Deal = {
 };
 
 describe("formatCaption", () => {
-  it("destaca descontos superiores a 30%", () => {
+  it("coloca preco, desconto e produto na primeira linha", () => {
     const caption = formatCaption({ ...baseDeal, discountPercentage: 31 }, baseDeal.originalUrl);
 
-    expect(caption).toContain("🚀 SUPER OFERTA — 💰");
+    expect(caption).toContain("🔥 <b>R$ 299,90 (-31%) - SSD NVMe 1 TB</b>");
   });
 
-  it("não destaca descontos de até 30%", () => {
-    const caption = formatCaption({ ...baseDeal, discountPercentage: 30 }, baseDeal.originalUrl);
-
-    expect(caption).not.toContain("SUPER OFERTA");
-  });
-
-  it("classifica os níveis de desconto e adiciona a categoria", () => {
-    expect(formatCaption({ ...baseDeal, discountPercentage: 15 }, baseDeal.originalUrl)).toContain("🔥 OFERTA BOA");
-    expect(formatCaption({ ...baseDeal, discountPercentage: 50 }, baseDeal.originalUrl)).toContain("💥 DESCONTO IMPERDÍVEL");
+  it("adiciona a categoria no novo layout", () => {
     expect(formatCaption(baseDeal, baseDeal.originalUrl)).toContain("#Armazenamento");
   });
 
@@ -46,21 +38,22 @@ describe("formatCaption", () => {
     expect(formatCaption(television, television.originalUrl)).toContain("#TV");
   });
 
-  it("mostra o link limpo quando a oferta tem displayUrl", () => {
+  it("mantem o link afiliado visivel quando a oferta tem displayUrl", () => {
+    const affiliateUrl = "https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&ued=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F123%2Fssd";
     const caption = formatCaption(
       { ...baseDeal, displayUrl: "https://www.kabum.com.br/produto/123/ssd" },
-      "https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&ued=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F123%2Fssd",
+      affiliateUrl,
     );
 
-    expect(caption).toContain("https://www.kabum.com.br/produto/123/ssd");
-    expect(caption).not.toContain("https://www.awin1.com/cread.php");
+    expect(caption).toContain("https://www.awin1.com/cread.php");
+    expect(caption).not.toContain("\nhttps://www.kabum.com.br/produto/123/ssd");
   });
 
-  it("mostra Tavarez Score e historico quando disponiveis", () => {
+  it("mostra Tavarez Score sem exibir o historico de preco", () => {
     const caption = formatCaption({
       ...baseDeal,
       tavarezScore: 88,
-      scoreLabel: "EXCELENTE",
+      scoreLabel: "Excelente",
       priceHistory: {
         lowestPrice90Days: 299.9,
         averagePrice30Days: 350,
@@ -71,9 +64,20 @@ describe("formatCaption", () => {
       },
     }, baseDeal.originalUrl);
 
-    expect(caption).toContain("TAVAREZ SCORE: 88/100 — EXCELENTE");
-    expect(caption).toContain("14% abaixo da média");
-    expect(caption).toContain("Menor preço em 12 dia(s)");
+    expect(caption).toContain("Tavarez Score: <b>88/100 — Excelente</b>");
+    expect(caption).not.toContain("abaixo da média");
+    expect(caption).not.toContain("Menor preço");
+  });
+
+  it("mostra cupom em formato copiavel e classifica celular", () => {
+    const caption = formatCaption({
+      ...baseDeal,
+      title: "Samsung Galaxy S24 5G 256GB",
+      couponCode: "CELULAR100",
+    }, baseDeal.originalUrl);
+
+    expect(caption).toContain("🎟️ Cupom: <code>CELULAR100</code>");
+    expect(caption).toContain("#Celular");
   });
 
   it("mantem apenas o botao principal da oferta", () => {

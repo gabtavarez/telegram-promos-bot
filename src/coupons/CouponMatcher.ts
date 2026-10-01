@@ -2,7 +2,9 @@ import type { Deal } from "../types/Deal.js";
 import type { Coupon } from "./CouponProvider.js";
 
 export function findCouponForDeal(deal: Deal, coupons: Coupon[]): Coupon | undefined {
-  const dealUrl = safeUrl(deal.originalUrl);
+  // Feeds da Awin entregam o tracking como URL principal. Para comparar a loja,
+  // usamos a URL final limpa quando ela estiver disponivel.
+  const dealUrl = safeUrl(deal.displayUrl ?? deal.originalUrl);
   if (!dealUrl) return undefined;
 
   return coupons

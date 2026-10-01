@@ -31,4 +31,14 @@ describe("coupon matcher", () => {
   it("não associa cupom de outra loja", () => {
     expect(findCouponForDeal(deal, [{ ...coupon, destinationUrl: "https://outraloja.com.br/" }])).toBeUndefined();
   });
+
+  it("usa a URL final da loja quando o produto veio por tracking Awin", () => {
+    const trackedDeal = {
+      ...deal,
+      originalUrl: "https://www.awin1.com/pclick.php?p=123&a=3108044&m=17729",
+      displayUrl: "https://www.kabum.com.br/",
+    };
+
+    expect(findCouponForDeal(trackedDeal, [coupon])?.code).toBe(coupon.code);
+  });
 });

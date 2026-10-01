@@ -47,6 +47,7 @@ describe("provider delivery checks", () => {
           <img src="https://example.com/ssd.jpg" />
           <span class="a-price"><span class="a-offscreen">R$ 399,90</span></span>
           <span class="a-text-price"><span class="a-offscreen">R$ 599,90</span></span>
+          <span>Use o cupom: TECH20</span>
         </div>
         <div data-asin="B0BAD12345">
           <a href="/dp/B0BAD12345"></a>
@@ -64,6 +65,7 @@ describe("provider delivery checks", () => {
       id: "amazon:B0CHX12345",
       provider: "amazon",
       currentPrice: 399.9,
+      couponCode: "TECH20",
     });
     expect(deals[0]?.originalUrl).toBe("https://www.amazon.com.br/dp/B0CHX12345");
   });
@@ -83,6 +85,7 @@ describe("provider delivery checks", () => {
             <span class="andes-money-amount__fraction">499</span>
             <span class="andes-money-amount__cents">90</span>
           </span>
+          <span>Cupom: SSD50</span>
         </div>
         <div class="promotion-item">
           <a href="https://www.mercadolivre.com.br/fone-generico/p/MLB654321"></a>
@@ -100,6 +103,7 @@ describe("provider delivery checks", () => {
       id: "mercado-livre:MLB123456",
       provider: "mercado-livre",
       currentPrice: 349.9,
+      couponCode: "SSD50",
     });
   });
 

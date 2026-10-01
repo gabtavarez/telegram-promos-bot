@@ -1,6 +1,9 @@
 const QUALITY_TV_TERM =
   /^(?=.*\b(?:smart\s*(?:tv|v)|tv|televis[aã]o|televisor)\b)(?=.*\b(?:4k|uhd|qled|oled|neo\s*qled|mini\s*led|crystal\s*uhd)\b)(?=.*\b(?:5\d|[6-9]\d|1\d{2})\s*(?:["”]|pol(?:egadas?)?)).*$/i;
 
+const QUALITY_PHONE_TERM =
+  /\b(?:(?:apple\s+)?iphone\s+(?:13|14|15|16|17)(?:\s*(?:mini|plus|pro|max|air|e))*|samsung\s+galaxy\s+(?:s(?:23|24|25|26)(?:\s*(?:fe|plus|ultra)|\+)?|z\s*(?:flip|fold)\s*[5-8]|a(?:35|36|55|56)|m(?:55|56)))\b/i;
+
 const HARDWARE_TERMS = [
   // Hardware principal
   /\b(gpu|vga)\b/i,
@@ -21,6 +24,9 @@ const HARDWARE_TERMS = [
   // TVs boas para setup/sala gamer: smart, 4K/painel premium e tela grande
   QUALITY_TV_TERM,
 
+  // Celulares atuais e de boa qualidade, sem modelos basicos ou antigos
+  QUALITY_PHONE_TERM,
+
   // Organizacao e estetica de setup
   /\b(bra[cç]o\s+articulado|suporte\s+articulado\s+para\s+monitor|pegboard|painel\s+perfurado)\b/i,
   /\b(suporte\s+para\s+(?:headset|notebook)|cabo(?:s)?\s+extensor(?:es)?\s+sleeved|sleeved\s+(?:24-?pin|8-?pin|argb))\b/i,
@@ -33,7 +39,8 @@ const BLOCKED_TERMS = [
   /\b(?:pc|computador|desktop)\s+(?:gamer|completo|montado|pronto)\b/i,
   /\b(?:pc|computador|desktop)\s+(?:amd|intel|ryzen|core\s+i[3579])\b/i,
   /\bkit\s+(?:pc|computador)\s+(?:gamer|completo|montado)\b/i,
-  /\b(tablet|celular|smartphone|iphone|ipad|impressora|webcam|roteador)\b/i,
+  /\b(tablet|ipad|impressora|webcam|roteador)\b/i,
+  /\b(capa|capinha|pel[ií]cula|case|carteira|suporte|tela|display|lente|bateria)\s+(?:para\s+)?(?:celular|smartphone|iphone|galaxy)\b/i,
   /\b(liquidificador|suco|smoothie|mosquito|inseto|insetos|praga|pragas|fly\s+bug|lampada|l[aâ]mpada|led\s+luz|armadilha|assassino\s+de\s+insetos)\b/i,
   /\b(l[aâ]mina|reparo\s+de\s+celular|cola\s+uv|solda|ferro\s+de\s+solda|ferramenta(?:s)?\s+de\s+reparo|telefone\s+desmontar)\b/i,
   /\b(filtro\s+de\s+poeira|dust\s+filter|mesh\s+shield|tela\s+de\s+poeira)\b/i,
@@ -64,6 +71,7 @@ const TRUSTED_BRANDS = [
   /\b(cooler\s+master|seasonic|super\s+flower|deepcool|nzxt|thermaltake|montech|lian\s+li|pichau|mancer|aigo)\b/i,
   /\b(logitech|razer|redragon|hyperx|havit|attack\s+shark|delux|ajazz|darmoshark|machenike|fifine|maono|edifier|jbl|anker|baseus)\b/i,
   /\b(lg|samsung|aoc|acer|dell|benq|tcl|philips|hisense)\b/i,
+  /\b(apple|iphone)\b/i,
 ];
 
 const QUALITY_SIGNALS = [
@@ -80,6 +88,7 @@ const QUALITY_SIGNALS = [
   /\b(mx-?[46]|kryonaut|nt-h[12]|xtm(?:50|70)|mastergel|thermal\s+grizzly)\b/i,
   /\b(bra[cç]o\s+articulado|pegboard|painel\s+perfurado|suporte\s+para\s+(?:headset|notebook)|cabo(?:s)?\s+extensor(?:es)?\s+sleeved)\b/i,
   /\b(ergon[oô]mica|apoio\s+lombar|encosto\s+mesh|bra[cç]o\s+[234]d|ajuste\s+de\s+altura|girat[oó]ria)\b/i,
+  /\b(iphone\s+(?:13|14|15|16|17)|galaxy\s+(?:s(?:23|24|25|26)|z\s*(?:flip|fold)\s*[5-8]|a(?:35|36|55|56)|m(?:55|56))|5g|(?:128|256|512)gb)\b/i,
 ];
 
 export function isPcHardwareDeal(title: string): boolean {
@@ -100,6 +109,7 @@ export function getHardwareQualityScore(title: string): number {
 
   if (isNotebook(title) && !isQualityNotebook(title)) return -20;
   if (isTv(title) && !QUALITY_TV_TERM.test(title)) return -20;
+  if (isPhone(title) && !QUALITY_PHONE_TERM.test(title)) return -20;
 
   return score;
 }
@@ -114,4 +124,8 @@ function isQualityNotebook(title: string): boolean {
 
 function isTv(title: string): boolean {
   return /\b(?:smart\s*(?:tv|v)|tv|televis[aã]o|televisor)\b/i.test(title);
+}
+
+function isPhone(title: string): boolean {
+  return /\b(?:celular|smartphone|iphone|samsung\s+galaxy)\b/i.test(title);
 }

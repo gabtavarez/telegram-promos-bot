@@ -4,6 +4,7 @@ import type { Deal } from "../types/Deal.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
 import { http } from "../utils/http.js";
 import { calculateDiscount, parseBrlPrice } from "../utils/price.js";
+import { extractVisibleCouponCode } from "../utils/couponCode.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
 export class MercadoLivreProvider implements AffiliateProvider {
@@ -44,7 +45,7 @@ export class MercadoLivreProvider implements AffiliateProvider {
 
       const originalUrl = new URL(href, "https://www.mercadolivre.com.br");
       const itemId = originalUrl.pathname.match(/(MLB-?\d+)/i)?.[1]?.replace("-", "") ?? originalUrl.pathname;
-      const couponCode = extractCouponCode(card.text());
+      const couponCode = extractVisibleCouponCode(card.text());
       originalUrl.search = "";
       deals.push({
         id: `mercado-livre:${itemId}`,
@@ -61,12 +62,6 @@ export class MercadoLivreProvider implements AffiliateProvider {
 
     return [...new Map(deals.map((deal) => [deal.id, deal])).values()];
   }
-}
-
-function extractCouponCode(text: string): string | undefined {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  const match = normalized.match(/\b(?:cupom|coupon|c[oó]digo)\b[:\s-]*([A-Z0-9][A-Z0-9_-]{3,24})\b/i);
-  return match?.[1]?.toUpperCase();
 }
 
 function readPrice(card: cheerio.Cheerio<AnyNode>, selectors: string[]): number | undefined {

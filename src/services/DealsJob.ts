@@ -50,7 +50,7 @@ export class DealsJob {
           console.warn("Nao foi possivel remover botoes comunitarios antigos neste ciclo.", error);
         }
       }
-      const discovered = await this.collectDeals();
+      const discovered = await this.attachCoupons(await this.collectDeals());
       const qualityCandidates = discovered.filter(isQualityCandidate);
       const history = await this.recordPriceHistorySafely(qualityCandidates);
       const enriched = qualityCandidates.map((deal) => enrichDealMetrics(deal, history.get(deal.id)));
@@ -59,8 +59,9 @@ export class DealsJob {
       console.log(
         `Filtro final: ${qualityCandidates.length} produto(s) de qualidade; ` +
           `${qualifiedDeals.length} promo(s) media(s)/boa(s); ` +
-          `${available.length} nova(s) apos o historico de 24h.`,
+          `${available.length} nova(s) apos o historico de 12h.`,
       );
+      logProviderAvailability(qualifiedDeals, available);
 
       await this.notifyAlerts(qualifiedDeals);
       this.cycleCount += 1;
@@ -128,7 +129,7 @@ export class DealsJob {
   }
 
   async search(query: string, limit = 3): Promise<DealSearchResult[]> {
-    const collected = await this.collectDeals();
+    const collected = await this.attachCoupons(await this.collectDeals());
     const qualityCandidates = collected.filter(isQualityCandidate);
     const history = await this.recordPriceHistorySafely(qualityCandidates);
     const candidates = qualityCandidates
@@ -153,7 +154,7 @@ export class DealsJob {
   }
 
   async testSend(): Promise<void> {
-    const deals = (await this.collectDeals()).filter(isQualityCandidate);
+    const deals = (await this.attachCoupons(await this.collectDeals())).filter(isQualityCandidate);
     const history = await this.recordPriceHistorySafely(deals);
     const enriched = deals.map((deal) => enrichDealMetrics(deal, history.get(deal.id)));
     const best = await selectFirstAvailableDeal(enriched.filter(isPromotableDeal), this.recentProviders);
@@ -225,6 +226,17 @@ export class DealsJob {
     const coupons = await this.couponProvider.getActiveCoupons();
     const coupon = findCouponForDeal(deal, coupons);
     return coupon ? { ...deal, couponCode: coupon.code } : deal;
+  }
+
+  private async attachCoupons(deals: Deal[]): Promise<Deal[]> {
+    if (!this.couponProvider || deals.every((deal) => deal.couponCode)) return deals;
+    const coupons = await this.couponProvider.getActiveCoupons();
+    if (coupons.length === 0) return deals;
+    return deals.map((deal) => {
+      if (deal.couponCode) return deal;
+      const coupon = findCouponForDeal(deal, coupons);
+      return coupon ? { ...deal, couponCode: coupon.code } : deal;
+    });
   }
 
   private async recordPriceHistorySafely(deals: Deal[]) {
@@ -415,4 +427,15 @@ function formatDateKey(date: Date): string {
     month: "2-digit",
     day: "2-digit",
   }).format(date);
+}
+
+function logProviderAvailability(qualified: Deal[], available: Deal[]): void {
+  const providers = [...new Set(qualified.map((deal) => deal.provider))];
+  if (providers.length === 0) return;
+  const summary = providers.map((provider) => {
+    const approved = qualified.filter((deal) => deal.provider === provider).length;
+    const fresh = available.filter((deal) => deal.provider === provider).length;
+    return `${provider}: ${fresh}/${approved} nova(s)`;
+  });
+  console.log(`Disponibilidade por loja: ${summary.join("; ")}.`);
 }

@@ -26,6 +26,12 @@ const HARDWARE_KEYWORDS = [
   "braco articulado monitor",
   "notebook ryzen 16gb ssd",
   "smart tv 4k 50",
+  "Samsung Galaxy S24 256GB",
+  "Samsung Galaxy S25 256GB",
+  "Samsung Galaxy A55 5G",
+  "Samsung Galaxy A56 5G",
+  "Apple iPhone 15 128GB",
+  "Apple iPhone 16 128GB",
 ];
 
 const productQuery = (keyword: string) => `{

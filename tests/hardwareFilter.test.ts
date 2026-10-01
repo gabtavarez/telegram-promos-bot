@@ -19,6 +19,9 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Fans ARGB 120mm para gabinete")).toBe(true);
     expect(isPcHardwareDeal("Luminaria de mesa ScreenBar para monitor")).toBe(true);
     expect(isPcHardwareDeal("Cadeira Ergonômica de Escritório Giratória com Encosto Mesh e Apoio Lombar")).toBe(true);
+    expect(isPcHardwareDeal("Smartphone Samsung Galaxy S24 5G 256GB 8GB RAM")).toBe(true);
+    expect(isPcHardwareDeal("Apple iPhone 16 128GB 5G")).toBe(true);
+    expect(isPcHardwareDeal("Samsung Galaxy A56 5G 256GB")).toBe(true);
   });
 
   it("blocks Mancer products and complete computers", () => {
@@ -53,6 +56,9 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Fonte ATX 300W Real Bivolt Chaveada")).toBe(false);
     expect(isPcHardwareDeal("Mouse sem fio escritorio silencioso")).toBe(false);
     expect(isPcHardwareDeal("Fone gamer RGB generico")).toBe(false);
+    expect(isPcHardwareDeal("Samsung Galaxy A06 128GB 4GB RAM")).toBe(false);
+    expect(isPcHardwareDeal("Apple iPhone 11 64GB")).toBe(false);
+    expect(isPcHardwareDeal("Capa para iPhone 16 Pro Max")).toBe(false);
   });
 
   it("scores curated products above weak products", () => {

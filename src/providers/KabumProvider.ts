@@ -17,6 +17,7 @@ interface AwinFeedProduct {
   id?: string | number;
   title?: string;
   link?: string;
+  destination_link?: string;
   image_link?: string;
   price?: string | number;
   sale_price?: string | number;
@@ -98,7 +99,7 @@ export class KabumProvider implements AffiliateProvider {
           provider: "kabum",
           title,
           originalUrl,
-          displayUrl: getDisplayUrl(product.link),
+          displayUrl: getDisplayUrl(product.destination_link ?? product.link),
           imageUrl,
           currentPrice,
           previousPrice,
@@ -178,6 +179,7 @@ function flattenProduct(record: AwinFeedRecord): AwinFeedProduct {
     id: pickValue(flat, "aw_product_id", "merchant_product_id", "product_id", "id"),
     title: pickValue(flat, "product_name", "title", "name", "nome"),
     link: pickValue(flat, "aw_deep_link", "deep_link", "deeplink", "link", "merchant_deep_link", "product_url", "url"),
+    destination_link: pickValue(flat, "merchant_deep_link", "product_url", "url", "deep_link"),
     image_link: pickValue(flat, "merchant_image_url", "aw_image_url", "image_link", "image_url", "large_image", "picture_url"),
     price: pickValue(flat, "search_price", "display_price", "store_price", "price", "product_price", "sale_price"),
     sale_price: pickValue(flat, "store_price", "sale_price"),

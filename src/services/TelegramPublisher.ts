@@ -97,16 +97,13 @@ export function formatCaption(
   affiliateUrl: string,
   status: PublishedOfferStatus = "active",
 ): string {
-  const previous = deal.previousPrice ? `<del>${currency.format(deal.previousPrice)}</del> ` : "";
   const discount = deal.discountPercentage ? ` (-${deal.discountPercentage}%)` : "";
-  const discountHighlight = getDiscountHighlight(deal.discountPercentage);
   const category = getCategoryHashtag(deal.title);
-  const coupon = deal.couponCode ? ["", `🎟️ CUPOM: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
-  const visibleUrl = deal.displayUrl ?? affiliateUrl;
+  const coupon = deal.couponCode ? ["", `🎟️ Cupom: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
+  const visibleUrl = affiliateUrl;
   const score = deal.tavarezScore
-    ? [`🏅 <b>TAVAREZ SCORE: ${deal.tavarezScore}/100 — ${escapeHtml(deal.scoreLabel ?? "")}</b>`]
+    ? ["", `🏅 Tavarez Score: <b>${deal.tavarezScore}/100 — ${escapeHtml(deal.scoreLabel ?? "")}</b>`]
     : [];
-  const history = formatPriceHistory(deal);
   const statusLine = status === "soldout"
     ? ["❌ <b>OFERTA ESGOTADA</b>", ""]
     : status === "price-changed"
@@ -115,20 +112,17 @@ export function formatCaption(
 
   return [
     ...statusLine,
-    `🔥 <b>${escapeHtml(deal.title)}</b>`,
-    "",
-    `${discountHighlight}💰 ${previous}<b>${currency.format(deal.currentPrice)}</b>${discount}`,
+    `🔥 <b>${currency.format(deal.currentPrice)}${discount} - ${escapeHtml(deal.title)}</b>`,
     ...score,
-    ...history,
     ...coupon,
     "",
-    ...(status === "soldout" ? [] : ["✅ VER OFERTA", escapeHtml(visibleUrl)]),
+    ...(status === "soldout" ? [] : ["✅ Link da Oferta:", escapeHtml(visibleUrl)]),
     "",
     `📢 #Anuncio ${category}`,
     status === "soldout"
       ? "ℹ️ Esta publicação foi atualizada automaticamente pelo bot."
-      : "⚠️ Preços e disponibilidade podem mudar a qualquer momento.",
-  ].join("\n");
+      : undefined,
+  ].filter((line): line is string => line !== undefined).join("\n");
 }
 
 export function buildOfferKeyboard(affiliateUrl: string): InlineKeyboard {
@@ -149,6 +143,7 @@ export function getDiscountHighlight(discountPercentage?: number): string {
 export function getCategoryHashtag(title: string): string {
   const normalized = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const categories: Array<[RegExp, string]> = [
+    [/\b(?:smartphone|celular|iphone|galaxy\s+[samz]\d)/, "#Celular"],
     [/\b(notebook|laptop|ultrabook|macbook)\b/, "#Notebook"],
     [/\b(tablet|ipad|tab\s?\d{1,2}|tab\s?[a-z]\d{1,2})\b/, "#Tablet"],
     [/\b(smart\s*(?:tv|v)|tv|televisao|televisor|qled|oled)\b/, "#TV"],
@@ -171,19 +166,6 @@ export function getCategoryHashtag(title: string): string {
 
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
-}
-
-function formatPriceHistory(deal: Deal): string[] {
-  const history = deal.priceHistory;
-  if (!history || history.observationDays < 2) return ["📊 Histórico de preço em formação."];
-  const lines: string[] = [];
-  if (history.percentBelow30DayAverage > 0) {
-    lines.push(`📉 ${history.percentBelow30DayAverage}% abaixo da média monitorada de 30 dias`);
-  }
-  if (history.isLowestPrice90Days) {
-    lines.push(`🏆 Menor preço em ${history.observationDays} dia(s) monitorado(s)`);
-  }
-  return lines;
 }
 
 export interface PublishedMessageReference {

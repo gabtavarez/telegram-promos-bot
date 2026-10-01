@@ -3,6 +3,7 @@ import type { Deal } from "../types/Deal.js";
 import { calculateDiscount, parseBrlPrice } from "../utils/price.js";
 import { http } from "../utils/http.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
+import { extractVisibleCouponCode } from "../utils/couponCode.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
 export class AmazonProvider implements AffiliateProvider {
@@ -32,6 +33,7 @@ export class AmazonProvider implements AffiliateProvider {
       const previousPrice = parseBrlPrice(
         card.find(".a-text-price .a-offscreen, [data-testid='price-block-list-price']").first().text(),
       );
+      const couponCode = extractVisibleCouponCode(card.text());
 
       if (!href || !asin || !title || !imageUrl || !currentPrice) return;
       if (!isPcHardwareDeal(title)) return;
@@ -47,6 +49,7 @@ export class AmazonProvider implements AffiliateProvider {
         currentPrice,
         previousPrice,
         discountPercentage: calculateDiscount(currentPrice, previousPrice),
+        couponCode,
       });
     });
 

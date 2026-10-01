@@ -30,7 +30,7 @@ export class UpstashPostedDealsStore implements DealsStore {
     baseUrl: string,
     token: string,
     private readonly retentionSeconds = 7 * 24 * 60 * 60,
-    private readonly repostCooldownMs = 24 * 60 * 60 * 1_000,
+    private readonly repostCooldownMs = 12 * 60 * 60 * 1_000,
   ) {
     this.client = axios.create({
       baseURL: baseUrl.replace(/\/$/, ""),

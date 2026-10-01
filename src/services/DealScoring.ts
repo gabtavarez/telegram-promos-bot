@@ -20,10 +20,10 @@ export function calculateTavarezScore(deal: Deal): number {
 }
 
 export function getTavarezScoreLabel(score: number): string {
-  if (score >= 85) return "EXCELENTE";
-  if (score >= 70) return "MUITO BOA";
-  if (score >= 60) return "BOA";
-  return "CUSTO-BENEFÍCIO";
+  if (score >= 85) return "Excelente";
+  if (score >= 70) return "Muito Boa";
+  if (score >= 60) return "Boa";
+  return "Custo-Benefício";
 }
 
 function calculateHistoryPoints(history?: PriceHistoryStats): number {
