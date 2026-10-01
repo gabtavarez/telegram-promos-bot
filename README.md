@@ -19,6 +19,7 @@ Preencha no `.env`:
 - `TELEGRAM_ADMIN_USER_ID`: ID numérico do único usuário autorizado a usar os comandos administrativos.
 - `AMAZON_TAG`: ID do programa de associados da Amazon.
 - `ML_TAG`: parâmetros de rastreio do Mercado Livre em formato de query string, como `matt_tool=123&matt_word=hardware`.
+- `CRON_SCHEDULE`: frequência de busca das ofertas. Use `*/5 * * * *` para verificar a cada cinco minutos.
 
 Para buscar cupons oficiais ativos na Awin, configure `AWIN_COUPONS_ENABLED=true`, `AWIN_PUBLISHER_ID` e `AWIN_ACCESS_TOKEN`. A variável opcional `AWIN_ADVERTISER_IDS` aceita IDs separados por vírgula, como `75796`, para limitar a busca às lojas desejadas.
 
@@ -45,7 +46,7 @@ npm start         # executa o build
 
 O limite de heap do Node foi fixado em 384 MB, deixando margem dentro dos 512 MB para o runtime e bibliotecas. A coleta é sequencial e cada resposta HTML é limitada a 6 MB.
 
-Um Web Service gratuito pode hibernar sem tráfego recebido; nesse estado, o agendamento interno de 45 minutos não é garantido. Para execução contínua, prefira um Background Worker disponível no seu plano ou um serviço pago. O endpoint `/health` existe para compatibilidade e monitoramento, não para substituir um worker contínuo.
+Um Web Service gratuito pode hibernar sem tráfego recebido; nesse estado, o agendamento interno não é garantido. Para execução contínua, prefira um Background Worker disponível no seu plano ou um serviço pago. O endpoint `/health` existe para compatibilidade e monitoramento, não para substituir um worker contínuo.
 
 ### Persistência
 

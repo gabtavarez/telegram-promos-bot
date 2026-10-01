@@ -88,7 +88,7 @@ async function main(): Promise<void> {
 
   startHttpServer(env.PORT, () => job.run(), () => job.testSend(), env.RUN_NOW_TOKEN);
 
-  const defaultIntervalMs = 10 * 60 * 1_000;
+  const defaultIntervalMs = 5 * 60 * 1_000;
   let nextRunAt = Date.now() + defaultIntervalMs;
   if (env.CRON_SCHEDULE) {
     if (!cron.validate(env.CRON_SCHEDULE)) throw new Error(`CRON_SCHEDULE invalido: ${env.CRON_SCHEDULE}`);
@@ -103,7 +103,7 @@ async function main(): Promise<void> {
       nextRunAt = now + defaultIntervalMs;
       void job.run().catch((error) => console.error("Ciclo de ofertas falhou.", error));
     });
-    console.log("Bot iniciado. Ofertas serao verificadas a cada 10 minutos.");
+    console.log("Bot iniciado. Ofertas serao verificadas a cada 5 minutos.");
   }
 
   if (env.RUN_ON_START) {

@@ -76,6 +76,7 @@ const QUALITY_SIGNALS = [
   /\b(ips|va|oled|qled|4k|uhd|ultrawide|(?:75|100|120|144|165|180|240)hz|1ms)\b/i,
   /\b(mec[aâ]nico|magn[eé]tico|hall\s*effect|abnt2|switch|tkl)\b|(?:60|68|75|100)\s*%/i,
   /\b(dpi|paw\s?3395|hero|lightspeed|hot\s*swap|pwm|argb|120mm|140mm|heatpipe|screenbar|dock\s+station)\b/i,
+  /\b(mx-?[46]|kryonaut|nt-h[12]|xtm(?:50|70)|mastergel|thermal\s+grizzly)\b/i,
   /\b(bra[cç]o\s+articulado|pegboard|painel\s+perfurado|suporte\s+para\s+(?:headset|notebook)|cabo(?:s)?\s+extensor(?:es)?\s+sleeved)\b/i,
 ];
 
