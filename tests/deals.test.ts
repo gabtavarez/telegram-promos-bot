@@ -57,6 +57,22 @@ describe("deal selection", () => {
     })).toBe(false);
   });
 
+  it("aceita preco historicamente bom mesmo quando o desconto informado e pequeno", () => {
+    expect(isPromotableDeal({
+      ...base,
+      title: "SSD NVMe Kingston 1TB M.2 PCIe 4.0",
+      discountPercentage: 8,
+      priceHistory: {
+        lowestPrice90Days: 300,
+        averagePrice30Days: 350,
+        averagePrice90Days: 360,
+        observationDays: 10,
+        isLowestPrice90Days: true,
+        percentBelow30DayAverage: 14,
+      },
+    })).toBe(true);
+  });
+
   it("favorece outra loja quando as ofertas sao comparaveis", () => {
     const title = "SSD NVMe Kingston 1TB M.2 PCIe 4.0";
     const sameStore = { ...base, id: "same", provider: "shopee" as const, title, discountPercentage: 30 };

@@ -1,5 +1,7 @@
 export type ProviderName = "amazon" | "mercado-livre" | "aliexpress" | "kabum" | "shopee";
 
+import type { PriceHistoryStats } from "./BotState.js";
+
 export interface Deal {
   id: string;
   provider: ProviderName;
@@ -11,4 +13,7 @@ export interface Deal {
   previousPrice?: number;
   discountPercentage?: number;
   couponCode?: string;
+  priceHistory?: PriceHistoryStats;
+  tavarezScore?: number;
+  scoreLabel?: string;
 }

@@ -43,9 +43,10 @@ describe("isDealAvailable", () => {
     await expect(isDealAvailable(kabumDeal)).resolves.toBe(true);
   });
 
-  it("nao consulta a pagina de outros provedores", async () => {
+  it("valida tambem paginas de outros provedores", async () => {
+    mocks.get.mockResolvedValue({ data: "<button>Comprar agora</button>" });
     await expect(isDealAvailable({ ...kabumDeal, provider: "shopee" })).resolves.toBe(true);
-    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.get).toHaveBeenCalledOnce();
   });
 
   it("bloqueia a oferta se a verificacao da Kabum falhar", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCaption } from "../src/services/TelegramPublisher.js";
+import { buildOfferKeyboard, formatCaption } from "../src/services/TelegramPublisher.js";
 import type { Deal } from "../src/types/Deal.js";
 
 const baseDeal: Deal = {
@@ -54,5 +54,35 @@ describe("formatCaption", () => {
 
     expect(caption).toContain("https://www.kabum.com.br/produto/123/ssd");
     expect(caption).not.toContain("https://www.awin1.com/cread.php");
+  });
+
+  it("mostra Tavarez Score e historico quando disponiveis", () => {
+    const caption = formatCaption({
+      ...baseDeal,
+      tavarezScore: 88,
+      scoreLabel: "EXCELENTE",
+      priceHistory: {
+        lowestPrice90Days: 299.9,
+        averagePrice30Days: 350,
+        averagePrice90Days: 370,
+        observationDays: 12,
+        isLowestPrice90Days: true,
+        percentBelow30DayAverage: 14,
+      },
+    }, baseDeal.originalUrl);
+
+    expect(caption).toContain("TAVAREZ SCORE: 88/100 — EXCELENTE");
+    expect(caption).toContain("14% abaixo da média");
+    expect(caption).toContain("Menor preço em 12 dia(s)");
+  });
+
+  it("inclui botoes de voto comunitario", () => {
+    const keyboard = buildOfferKeyboard(baseDeal.originalUrl, "0123456789abcdef", {
+      worth: 3,
+      soldout: 1,
+      bad: 0,
+    });
+    expect(JSON.stringify(keyboard)).toContain("Vale a pena (3)");
+    expect(JSON.stringify(keyboard)).toContain("fb:soldout:0123456789abcdef");
   });
 });

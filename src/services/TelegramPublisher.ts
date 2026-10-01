@@ -1,5 +1,12 @@
+import { createHash } from "node:crypto";
 import { Bot, InlineKeyboard } from "grammy";
 import type { Deal } from "../types/Deal.js";
+import type {
+  FeedbackCounts,
+  PublishedMessageType,
+  PublishedOffer,
+  PublishedOfferStatus,
+} from "../types/BotState.js";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -10,46 +17,131 @@ export class TelegramPublisher {
     this.bot = new Bot(token);
   }
 
-  async publish(deal: Deal, affiliateUrl: string): Promise<void> {
+  async publish(deal: Deal, affiliateUrl: string): Promise<PublishedMessageReference> {
+    const feedbackKey = getFeedbackKey(deal.id);
     const caption = formatCaption(deal, affiliateUrl);
-    const keyboard = new InlineKeyboard().url("✅ VER OFERTA", affiliateUrl);
+    const keyboard = buildOfferKeyboard(affiliateUrl, feedbackKey);
     try {
-      await this.bot.api.sendPhoto(this.channelId, deal.imageUrl, {
+      const message = await this.bot.api.sendPhoto(this.channelId, deal.imageUrl, {
         caption,
         parse_mode: "HTML",
         reply_markup: keyboard,
       });
+      return { messageId: message.message_id, messageType: "photo", feedbackKey };
     } catch (error) {
       console.warn("Falha ao enviar a imagem; enviando a oferta sem foto.", error);
-      await this.bot.api.sendMessage(this.channelId, caption, {
+      const message = await this.bot.api.sendMessage(this.channelId, caption, {
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: false },
+        reply_markup: keyboard,
+      });
+      return { messageId: message.message_id, messageType: "text", feedbackKey };
+    }
+  }
+
+  async editPublishedOffer(offer: PublishedOffer): Promise<void> {
+    const caption = formatCaption(offer.deal, offer.affiliateUrl, offer.status);
+    const keyboard = offer.status === "soldout"
+      ? new InlineKeyboard()
+      : buildOfferKeyboard(offer.affiliateUrl, offer.feedbackKey);
+    if (offer.messageType === "photo") {
+      await this.bot.api.editMessageCaption(this.channelId, offer.messageId, {
+        caption,
+        parse_mode: "HTML",
+        reply_markup: keyboard,
+      });
+      return;
+    }
+    await this.bot.api.editMessageText(this.channelId, offer.messageId, caption, {
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: false },
+      reply_markup: keyboard,
+    });
+  }
+
+  async sendPrivateAlert(userId: string, deal: Deal, affiliateUrl: string): Promise<void> {
+    const caption = [`🔔 <b>ALERTA ENCONTRADO</b>`, "", formatCaption(deal, affiliateUrl)].join("\n");
+    const keyboard = new InlineKeyboard().url("✅ VER OFERTA", affiliateUrl);
+    try {
+      await this.bot.api.sendPhoto(userId, deal.imageUrl, { caption, parse_mode: "HTML", reply_markup: keyboard });
+    } catch {
+      await this.bot.api.sendMessage(userId, caption, {
         parse_mode: "HTML",
         link_preview_options: { is_disabled: false },
         reply_markup: keyboard,
       });
     }
   }
+
+  async publishDailySummary(offers: PublishedOffer[]): Promise<void> {
+    const lines = offers.map((offer, index) => {
+      const score = offer.deal.tavarezScore ? ` · Score ${offer.deal.tavarezScore}` : "";
+      return `${index + 1}. <a href="${escapeHtml(offer.affiliateUrl)}">${escapeHtml(offer.deal.title)}</a>\n` +
+        `💰 ${currency.format(offer.deal.currentPrice)}${score}`;
+    });
+    await this.bot.api.sendMessage(this.channelId, [
+      "🏆 <b>AS MELHORES OFERTAS DO DIA</b>",
+      "",
+      ...lines.flatMap((line) => [line, ""]),
+      "📌 Seleção automática pelas notas de qualidade, preço e desconto.",
+    ].join("\n"), { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+  }
 }
 
-export function formatCaption(deal: Deal, affiliateUrl: string): string {
+export function formatCaption(
+  deal: Deal,
+  affiliateUrl: string,
+  status: PublishedOfferStatus = "active",
+): string {
   const previous = deal.previousPrice ? `<del>${currency.format(deal.previousPrice)}</del> ` : "";
   const discount = deal.discountPercentage ? ` (-${deal.discountPercentage}%)` : "";
   const discountHighlight = getDiscountHighlight(deal.discountPercentage);
   const category = getCategoryHashtag(deal.title);
   const coupon = deal.couponCode ? ["", `🎟️ CUPOM: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
   const visibleUrl = deal.displayUrl ?? affiliateUrl;
+  const score = deal.tavarezScore
+    ? [`🏅 <b>TAVAREZ SCORE: ${deal.tavarezScore}/100 — ${escapeHtml(deal.scoreLabel ?? "")}</b>`]
+    : [];
+  const history = formatPriceHistory(deal);
+  const statusLine = status === "soldout"
+    ? ["❌ <b>OFERTA ESGOTADA</b>", ""]
+    : status === "price-changed"
+      ? ["⚠️ <b>PREÇO ATUALIZADO</b>", ""]
+      : [];
 
   return [
+    ...statusLine,
     `🔥 <b>${escapeHtml(deal.title)}</b>`,
     "",
     `${discountHighlight}💰 ${previous}<b>${currency.format(deal.currentPrice)}</b>${discount}`,
+    ...score,
+    ...history,
     ...coupon,
     "",
-    "✅ VER OFERTA",
-    escapeHtml(visibleUrl),
+    ...(status === "soldout" ? [] : ["✅ VER OFERTA", escapeHtml(visibleUrl)]),
     "",
     `📢 #Anuncio ${category}`,
-    "⚠️ Preços e disponibilidade podem mudar a qualquer momento.",
+    status === "soldout"
+      ? "ℹ️ Esta publicação foi atualizada automaticamente pelo bot."
+      : "⚠️ Preços e disponibilidade podem mudar a qualquer momento.",
   ].join("\n");
+}
+
+export function buildOfferKeyboard(
+  affiliateUrl: string,
+  feedbackKey: string,
+  counts: FeedbackCounts = { worth: 0, soldout: 0, bad: 0 },
+): InlineKeyboard {
+  return new InlineKeyboard()
+    .url("✅ VER OFERTA", affiliateUrl)
+    .row()
+    .text(`👍 Vale a pena${formatCount(counts.worth)}`, `fb:worth:${feedbackKey}`)
+    .text(`⚠️ Esgotou${formatCount(counts.soldout)}`, `fb:soldout:${feedbackKey}`)
+    .text(`👎 Preço ruim${formatCount(counts.bad)}`, `fb:bad:${feedbackKey}`);
+}
+
+export function getFeedbackKey(dealId: string): string {
+  return createHash("sha256").update(dealId).digest("hex").slice(0, 16);
 }
 
 export function getDiscountHighlight(discountPercentage?: number): string {
@@ -83,4 +175,27 @@ export function getCategoryHashtag(title: string): string {
 
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function formatPriceHistory(deal: Deal): string[] {
+  const history = deal.priceHistory;
+  if (!history || history.observationDays < 2) return ["📊 Histórico de preço em formação."];
+  const lines: string[] = [];
+  if (history.percentBelow30DayAverage > 0) {
+    lines.push(`📉 ${history.percentBelow30DayAverage}% abaixo da média monitorada de 30 dias`);
+  }
+  if (history.isLowestPrice90Days) {
+    lines.push(`🏆 Menor preço em ${history.observationDays} dia(s) monitorado(s)`);
+  }
+  return lines;
+}
+
+function formatCount(value: number): string {
+  return value > 0 ? ` (${value})` : "";
+}
+
+export interface PublishedMessageReference {
+  messageId: number;
+  messageType: PublishedMessageType;
+  feedbackKey: string;
 }

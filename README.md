@@ -27,7 +27,11 @@ As URLs das páginas monitoradas (por padrão, ofertas de informática/hardware)
 
 ## Comandos
 
-No chat privado com o bot, o administrador pode usar `/oferta`, `/status`, `/buscar SSD`, `/cupons`, `/pausar` e `/retomar`.
+No chat privado com o bot, qualquer usuário pode criar alertas com `/alerta RTX 4060 abaixo de 1900`, consultar com `/meus_alertas` e excluir com `/remover_alerta ID`.
+
+O administrador também pode usar `/oferta`, `/status`, `/buscar SSD`, `/cupons`, `/pausar` e `/retomar`.
+
+O bot mantém histórico diário de preços por até 90 dias, calcula o Tavarez Score, recebe votos da comunidade e revisa até oito publicações recentes a cada seis ciclos. Às 20h, no horário de São Paulo, publica automaticamente um resumo com as cinco melhores ofertas das últimas 24 horas.
 
 ```bash
 npm run dev       # desenvolvimento

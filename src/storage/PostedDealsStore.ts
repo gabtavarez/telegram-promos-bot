@@ -1,16 +1,51 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Deal } from "../types/Deal.js";
+import type {
+  FeedbackCounts,
+  FeedbackType,
+  PriceHistoryStats,
+  PublishedOffer,
+  UserAlert,
+} from "../types/BotState.js";
 import type { DealsStore } from "./DealsStore.js";
+import {
+  calculatePriceHistoryStats,
+  getPriceHistoryDateKeys,
+  mergeDailyPrices,
+  type DailyPrices,
+} from "./priceHistory.js";
 
 type PostedDeals = Record<string, string>;
 
+interface LocalBotState {
+  prices: Record<string, DailyPrices>;
+  published: PublishedOffer[];
+  alerts: UserAlert[];
+  alertNotifications: Record<string, string>;
+  feedback: Record<string, { votes: Record<string, FeedbackType> }>;
+  summaries: string[];
+}
+
+const emptyState = (): LocalBotState => ({
+  prices: {},
+  published: [],
+  alerts: [],
+  alertNotifications: {},
+  feedback: {},
+  summaries: [],
+});
+
 export class PostedDealsStore implements DealsStore {
   private readonly filePath: string;
+  private readonly statePath: string;
   private records: PostedDeals = {};
+  private state: LocalBotState = emptyState();
 
   constructor(filePath: string, private readonly retentionMs = 7 * 24 * 60 * 60 * 1_000) {
     this.filePath = resolve(filePath);
+    this.statePath = `${this.filePath}.state.json`;
   }
 
   async initialize(): Promise<void> {
@@ -23,6 +58,11 @@ export class PostedDealsStore implements DealsStore {
         console.warn("Historico invalido; iniciando um novo arquivo.", error);
       }
       this.records = {};
+    }
+    try {
+      this.state = JSON.parse(await readFile(this.statePath, "utf8")) as LocalBotState;
+    } catch {
+      this.state = emptyState();
     }
     await this.prune();
   }
@@ -45,6 +85,69 @@ export class PostedDealsStore implements DealsStore {
     await this.persist();
   }
 
+  async recordPriceHistory(deals: Deal[], now = new Date()): Promise<Map<string, PriceHistoryStats>> {
+    const dates = getPriceHistoryDateKeys(now);
+    const today = dates[0]!;
+    this.state.prices[today] = mergeDailyPrices(this.state.prices[today] ?? {}, deals);
+    this.state.prices = Object.fromEntries(Object.entries(this.state.prices).filter(([date]) => dates.includes(date)));
+    await this.persistState();
+    return calculatePriceHistoryStats(deals, dates, new Map(Object.entries(this.state.prices)));
+  }
+
+  async savePublishedOffer(offer: PublishedOffer): Promise<void> {
+    this.state.published = [offer, ...this.state.published.filter((item) => item.feedbackKey !== offer.feedbackKey)].slice(0, 100);
+    await this.persistState();
+  }
+
+  async getPublishedOffers(limit = 100): Promise<PublishedOffer[]> {
+    return this.state.published.slice(0, limit);
+  }
+
+  async updatePublishedOffer(offer: PublishedOffer): Promise<void> {
+    await this.savePublishedOffer(offer);
+  }
+
+  async createAlert(userId: string, query: string, maxPrice?: number): Promise<UserAlert> {
+    const alert = { id: randomUUID().slice(0, 8), userId, query, maxPrice, createdAt: new Date().toISOString() };
+    this.state.alerts.push(alert);
+    await this.persistState();
+    return alert;
+  }
+
+  async listAlerts(userId?: string): Promise<UserAlert[]> {
+    return userId ? this.state.alerts.filter((alert) => alert.userId === userId) : [...this.state.alerts];
+  }
+
+  async removeAlert(userId: string, alertId: string): Promise<boolean> {
+    const previousLength = this.state.alerts.length;
+    this.state.alerts = this.state.alerts.filter((alert) => alert.userId !== userId || alert.id !== alertId);
+    if (this.state.alerts.length !== previousLength) await this.persistState();
+    return this.state.alerts.length !== previousLength;
+  }
+
+  async claimAlertNotification(alertId: string, dealId: string): Promise<boolean> {
+    const key = `${alertId}:${dealId}`;
+    if (this.state.alertNotifications[key]) return false;
+    this.state.alertNotifications[key] = new Date().toISOString();
+    await this.persistState();
+    return true;
+  }
+
+  async recordFeedback(feedbackKey: string, userId: string, type: FeedbackType): Promise<FeedbackCounts> {
+    const entry = this.state.feedback[feedbackKey] ?? { votes: {} };
+    entry.votes[userId] = type;
+    this.state.feedback[feedbackKey] = entry;
+    await this.persistState();
+    return countFeedback(entry.votes);
+  }
+
+  async claimDailySummary(date: string): Promise<boolean> {
+    if (this.state.summaries.includes(date)) return false;
+    this.state.summaries.push(date);
+    await this.persistState();
+    return true;
+  }
+
   private async prune(now = Date.now()): Promise<void> {
     this.records = Object.fromEntries(
       Object.entries(this.records).filter(([, value]) => now - Date.parse(value) < this.retentionMs),
@@ -57,4 +160,16 @@ export class PostedDealsStore implements DealsStore {
     await writeFile(temporaryPath, JSON.stringify(this.records, null, 2), "utf8");
     await rename(temporaryPath, this.filePath);
   }
+
+  private async persistState(): Promise<void> {
+    const temporaryPath = `${this.statePath}.tmp`;
+    await writeFile(temporaryPath, JSON.stringify(this.state), "utf8");
+    await rename(temporaryPath, this.statePath);
+  }
+}
+
+function countFeedback(votes: Record<string, FeedbackType>): FeedbackCounts {
+  const counts: FeedbackCounts = { worth: 0, soldout: 0, bad: 0 };
+  for (const type of Object.values(votes)) counts[type] += 1;
+  return counts;
 }

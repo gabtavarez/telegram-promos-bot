@@ -8,7 +8,9 @@ import { TelegramPublisher } from "./TelegramPublisher.js";
 import type { CouponProvider } from "../coupons/CouponProvider.js";
 import { findCouponForDeal } from "../coupons/CouponMatcher.js";
 import type { Coupon } from "../coupons/CouponProvider.js";
-import { isDealAvailable } from "./DealAvailabilityChecker.js";
+import type { FeedbackCounts, FeedbackType, PublishedOffer, UserAlert } from "../types/BotState.js";
+import { checkDealAvailability, isDealAvailable } from "./DealAvailabilityChecker.js";
+import { enrichDealMetrics } from "./DealScoring.js";
 
 export class DealsJob {
   private running = false;
@@ -17,6 +19,7 @@ export class DealsJob {
   private lastPublishedAt?: Date;
   private lastPublishedTitle?: string;
   private readonly recentProviders: ProviderName[] = [];
+  private cycleCount = 0;
 
   constructor(
     private readonly providers: AffiliateProvider[],
@@ -38,20 +41,20 @@ export class DealsJob {
 
     this.running = true;
     try {
-      const available: Deal[] = [];
-      for (const provider of this.providers) {
-        try {
-          const deals = await provider.getDeals();
-          const qualifiedDeals = deals.filter(isPromotableDeal);
-          available.push(...(await this.store.filterUnposted(qualifiedDeals)));
-          console.log(
-            `${provider.name}: ${deals.length} ofertas encontradas; ` +
-              `${qualifiedDeals.length} promo(s) media(s)/boa(s) aprovada(s).`,
-          );
-        } catch (error) {
-          console.error(`Falha ao consultar ${provider.name}.`, error);
-        }
-      }
+      const discovered = await this.collectDeals();
+      const qualityCandidates = discovered.filter(isQualityCandidate);
+      const history = await this.recordPriceHistorySafely(qualityCandidates);
+      const enriched = qualityCandidates.map((deal) => enrichDealMetrics(deal, history.get(deal.id)));
+      const qualifiedDeals = enriched.filter(isPromotableDeal);
+      const available = await this.store.filterUnposted(qualifiedDeals);
+      console.log(
+        `Filtro final: ${qualityCandidates.length} produto(s) de qualidade; ` +
+          `${qualifiedDeals.length} promo(s) media(s)/boa(s).`,
+      );
+
+      await this.notifyAlerts(qualifiedDeals);
+      this.cycleCount += 1;
+      if (this.cycleCount % 6 === 0) await this.monitorPublishedOffers(enriched);
 
       const best = await selectFirstAvailableDeal(available, this.recentProviders);
       if (!best) {
@@ -59,10 +62,19 @@ export class DealsJob {
         return "no-deal";
       }
 
-      const dealWithCoupon = await this.attachCoupon(best);
+      const dealWithCoupon = enrichDealMetrics(await this.attachCoupon(best), best.priceHistory);
       const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
-      await this.publisher.publish(dealWithCoupon, affiliateUrl);
+      const message = await this.publisher.publish(dealWithCoupon, affiliateUrl);
       await this.store.markPosted(best.id, best.originalUrl);
+      await this.store.savePublishedOffer({
+        deal: dealWithCoupon,
+        affiliateUrl,
+        messageId: message.messageId,
+        messageType: message.messageType,
+        feedbackKey: message.feedbackKey,
+        publishedAt: new Date().toISOString(),
+        status: "active",
+      });
       this.lastPublishedAt = new Date();
       this.lastPublishedTitle = best.title;
       this.rememberProvider(best.provider);
@@ -98,7 +110,11 @@ export class DealsJob {
   }
 
   async search(query: string, limit = 3): Promise<DealSearchResult[]> {
-    const candidates = (await this.collectDeals())
+    const collected = await this.collectDeals();
+    const qualityCandidates = collected.filter(isQualityCandidate);
+    const history = await this.recordPriceHistorySafely(qualityCandidates);
+    const candidates = qualityCandidates
+      .map((deal) => enrichDealMetrics(deal, history.get(deal.id)))
       .filter((deal) => matchesDealSearch(deal, query))
       .filter(isPromotableDeal)
       .sort(compareDeals);
@@ -119,17 +135,57 @@ export class DealsJob {
   }
 
   async testSend(): Promise<void> {
-    const deals = await this.collectDeals();
-    const best = await selectFirstAvailableDeal(deals.filter(isPromotableDeal), this.recentProviders);
+    const deals = (await this.collectDeals()).filter(isQualityCandidate);
+    const history = await this.recordPriceHistorySafely(deals);
+    const enriched = deals.map((deal) => enrichDealMetrics(deal, history.get(deal.id)));
+    const best = await selectFirstAvailableDeal(enriched.filter(isPromotableDeal), this.recentProviders);
     if (!best) {
       console.log("Nenhuma oferta encontrada para teste.");
       return;
     }
 
-    const dealWithCoupon = await this.attachCoupon(best);
+    const dealWithCoupon = enrichDealMetrics(await this.attachCoupon(best), best.priceHistory);
     const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
     await this.publisher.publish(dealWithCoupon, affiliateUrl);
     console.log(`Oferta de teste publicada: ${best.title}`);
+  }
+
+  async createAlert(userId: string, query: string, maxPrice?: number): Promise<UserAlert> {
+    return this.store.createAlert(userId, query, maxPrice);
+  }
+
+  async listAlerts(userId: string): Promise<UserAlert[]> {
+    return this.store.listAlerts(userId);
+  }
+
+  async removeAlert(userId: string, alertId: string): Promise<boolean> {
+    return this.store.removeAlert(userId, alertId);
+  }
+
+  async recordFeedback(feedbackKey: string, userId: string, type: FeedbackType): Promise<FeedbackResult> {
+    const counts = await this.store.recordFeedback(feedbackKey, userId, type);
+    const offer = (await this.store.getPublishedOffers()).find((item) => item.feedbackKey === feedbackKey);
+    if (offer && type === "soldout" && counts.soldout >= 3 && offer.status !== "soldout") {
+      void this.verifyReportedSoldOut(offer).catch((error) =>
+        console.warn(`Falha ao verificar oferta reportada: ${offer.deal.title}`, error),
+      );
+    }
+    return { counts, offer };
+  }
+
+  async publishDailySummary(now = new Date()): Promise<boolean> {
+    const cutoff = now.getTime() - 24 * 60 * 60 * 1_000;
+    const offers = (await this.store.getPublishedOffers())
+      .filter((offer) => offer.status !== "soldout" && Date.parse(offer.publishedAt) >= cutoff)
+      .sort((a, b) => (b.deal.tavarezScore ?? 0) - (a.deal.tavarezScore ?? 0))
+      .slice(0, 5);
+    if (offers.length === 0) return false;
+
+    const date = formatDateKey(now);
+    if (!(await this.store.claimDailySummary(date))) return false;
+    await this.publisher.publishDailySummary(offers);
+    console.log(`Resumo diario publicado com ${offers.length} oferta(s).`);
+    return true;
   }
 
   private async collectDeals(): Promise<Deal[]> {
@@ -151,6 +207,81 @@ export class DealsJob {
     const coupons = await this.couponProvider.getActiveCoupons();
     const coupon = findCouponForDeal(deal, coupons);
     return coupon ? { ...deal, couponCode: coupon.code } : deal;
+  }
+
+  private async recordPriceHistorySafely(deals: Deal[]) {
+    try {
+      return await this.store.recordPriceHistory(deals);
+    } catch (error) {
+      console.warn("Nao foi possivel atualizar o historico de precos neste ciclo.", error);
+      return new Map();
+    }
+  }
+
+  private async notifyAlerts(deals: Deal[]): Promise<void> {
+    const alerts = await this.store.listAlerts();
+    let sent = 0;
+    for (const alert of alerts) {
+      if (sent >= 20) break;
+      const deal = selectBestDeal(deals.filter((candidate) =>
+        matchesDealSearch(candidate, alert.query) &&
+        (alert.maxPrice === undefined || candidate.currentPrice <= alert.maxPrice),
+      ));
+      if (!deal || (deal.provider === "kabum" && !(await isDealAvailable(deal)))) continue;
+      if (!(await this.store.claimAlertNotification(alert.id, deal.id))) continue;
+      const affiliateUrl = addAffiliateTag(deal.provider, deal.originalUrl, this.tags);
+      try {
+        await this.publisher.sendPrivateAlert(alert.userId, deal, affiliateUrl);
+        sent += 1;
+      } catch (error) {
+        console.warn(`Falha ao enviar alerta ${alert.id} para o usuario.`, error);
+      }
+    }
+    if (sent > 0) console.log(`${sent} alerta(s) personalizado(s) enviado(s).`);
+  }
+
+  private async monitorPublishedOffers(currentDeals: Deal[]): Promise<void> {
+    const currentById = new Map(currentDeals.map((deal) => [deal.id, deal]));
+    const cutoff = Date.now() - 48 * 60 * 60 * 1_000;
+    const active = (await this.store.getPublishedOffers(30))
+      .filter((offer) => offer.status !== "soldout" && Date.parse(offer.publishedAt) >= cutoff)
+      .slice(0, 8);
+
+    for (let index = 0; index < active.length; index += 4) {
+      const batch = active.slice(index, index + 4);
+      const checked = await Promise.all(batch.map(async (offer) => ({
+        offer,
+        availability: await checkDealAvailability(offer.deal),
+      })));
+      for (const { offer, availability } of checked) {
+        let updated = offer;
+        const current = currentById.get(offer.deal.id);
+        if (current && Math.abs(current.currentPrice - offer.deal.currentPrice) >= 0.01) {
+          updated = {
+            ...updated,
+            deal: enrichDealMetrics({ ...current, couponCode: offer.deal.couponCode }, current.priceHistory),
+            status: "price-changed",
+          };
+        }
+
+        if (availability === "unavailable") updated = { ...updated, status: "soldout" };
+        if (updated !== offer) {
+          try {
+            await this.publisher.editPublishedOffer(updated);
+            await this.store.updatePublishedOffer(updated);
+          } catch (error) {
+            console.warn(`Falha ao atualizar oferta publicada: ${offer.deal.title}`, error);
+          }
+        }
+      }
+    }
+  }
+
+  private async verifyReportedSoldOut(offer: PublishedOffer): Promise<void> {
+    if (await checkDealAvailability(offer.deal) !== "unavailable") return;
+    const updated = { ...offer, status: "soldout" as const };
+    await this.publisher.editPublishedOffer(updated);
+    await this.store.updatePublishedOffer(updated);
   }
 
   private rememberProvider(provider: ProviderName): void {
@@ -175,6 +306,11 @@ export interface DealSearchResult {
   affiliateUrl: string;
 }
 
+export interface FeedbackResult {
+  counts: FeedbackCounts;
+  offer?: PublishedOffer;
+}
+
 export function selectBestDeal(deals: Deal[], recentProviders: ProviderName[] = []): Deal | undefined {
   return [...deals].sort((a, b) => compareDeals(a, b, recentProviders))[0];
 }
@@ -184,7 +320,7 @@ async function selectFirstAvailableDeal(
   recentProviders: ProviderName[] = [],
 ): Promise<Deal | undefined> {
   for (const deal of [...deals].sort((a, b) => compareDeals(a, b, recentProviders))) {
-    if (await isDealAvailable(deal)) return deal;
+    if (deal.provider !== "kabum" || await isDealAvailable(deal)) return deal;
   }
   return undefined;
 }
@@ -194,11 +330,21 @@ export function isPromotableDeal(deal: Deal): boolean {
   if (qualityScore < 6) return false;
 
   if (deal.couponCode) return true;
-  if (deal.discountPercentage !== undefined) return deal.discountPercentage >= 15;
+  if ((deal.discountPercentage ?? 0) >= 15) return true;
+
+  if ((deal.priceHistory?.observationDays ?? 0) >= 3) {
+    return (deal.priceHistory?.percentBelow30DayAverage ?? 0) >= 10;
+  }
+
+  if (deal.discountPercentage !== undefined) return false;
 
   // Alguns feeds, especialmente o da Awin, nao informam o preco anterior.
   // Nesses casos, somente produtos com varios sinais fortes de qualidade entram.
   return qualityScore >= 8;
+}
+
+export function isQualityCandidate(deal: Deal): boolean {
+  return getHardwareQualityScore(deal.title) >= 6;
 }
 
 export function matchesDealSearch(deal: Deal, query: string): boolean {
@@ -217,12 +363,22 @@ function compareDeals(a: Deal, b: Deal, recentProviders: ProviderName[] = []): n
 export function getDealSelectionScore(deal: Deal, recentProviders: ProviderName[] = []): number {
   const quality = Math.max(0, getHardwareQualityScore(deal.title));
   const discount = Math.min(deal.discountPercentage ?? 0, 60);
+  const historyBonus = Math.max(0, Math.min(deal.priceHistory?.percentBelow30DayAverage ?? 0, 20));
   const couponBonus = deal.couponCode ? 8 : 0;
   const mostRecentPenalty = recentProviders[0] === deal.provider ? 20 : 0;
   const recentPenalty = !mostRecentPenalty && recentProviders.slice(1).includes(deal.provider) ? 8 : 0;
-  return quality * 5 + discount + couponBonus - mostRecentPenalty - recentPenalty;
+  return (deal.tavarezScore ?? quality * 5) + discount + historyBonus + couponBonus - mostRecentPenalty - recentPenalty;
 }
 
 function normalizeSearch(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+function formatDateKey(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }

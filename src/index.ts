@@ -80,13 +80,15 @@ async function main(): Promise<void> {
     couponProvider,
   );
 
-  if (env.TELEGRAM_ADMIN_USER_ID) {
-    new TelegramAdminBot(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_ADMIN_USER_ID, job).start();
-  } else {
-    console.log("Comandos administrativos desativados: TELEGRAM_ADMIN_USER_ID nao configurado.");
+  new TelegramAdminBot(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_ADMIN_USER_ID ?? "", job).start();
+  if (!env.TELEGRAM_ADMIN_USER_ID) {
+    console.log("Comandos administrativos desativados; alertas publicos continuam ativos.");
   }
 
   startHttpServer(env.PORT, () => job.run(), () => job.testSend(), env.RUN_NOW_TOKEN);
+  cron.schedule("0 20 * * *", () => {
+    void job.publishDailySummary().catch((error) => console.error("Falha ao publicar resumo diario.", error));
+  }, { timezone: "America/Sao_Paulo" });
 
   const defaultIntervalMs = 5 * 60 * 1_000;
   let nextRunAt = Date.now() + defaultIntervalMs;
