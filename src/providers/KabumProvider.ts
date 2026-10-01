@@ -31,6 +31,7 @@ type AwinFeedRecord = Record<string, unknown> & {
 export class KabumProvider implements AffiliateProvider {
   readonly name = "Kabum";
   private readonly client: AxiosInstance;
+  private feedSource = "automatico";
 
   constructor(private readonly config: KabumConfig) {
     this.client = axios.create({
@@ -81,17 +82,29 @@ export class KabumProvider implements AffiliateProvider {
         : error instanceof Error
           ? error.message
           : String(error);
-      console.error(`Falha na API de produtos da Kabum/Awin: ${message}`);
+      console.error(`Falha na API de produtos da Kabum/Awin (${this.feedSource}): ${message}`);
       return [];
     }
   }
 
   private async fetchFeedRecords(): Promise<AwinFeedRecord[]> {
     if (this.config.feedUrl) {
-      const { data } = await this.client.get<string>(this.config.feedUrl);
-      return parseCsvFeed(data);
+      this.feedSource = "feed manual";
+      try {
+        const { data } = await this.client.get<string>(this.config.feedUrl);
+        return parseCsvFeed(data);
+      } catch (error) {
+        if (!this.config.accessToken) throw error;
+        const message = axios.isAxiosError(error)
+          ? `${error.response?.status ?? error.code ?? "HTTP_ERROR"}: ${error.message}`
+          : error instanceof Error
+            ? error.message
+            : String(error);
+        console.warn(`Feed manual da Kabum/Awin falhou; tentando feed automatico. Motivo: ${message}`);
+      }
     }
 
+    this.feedSource = "feed automatico";
     const path = `/publishers/${this.config.publisherId}/awinfeeds/download/${this.config.advertiserId}-retail-${this.config.locale}.jsonl`;
     const { data } = await this.client.get<string>(path);
     return parseJsonLines(data);
