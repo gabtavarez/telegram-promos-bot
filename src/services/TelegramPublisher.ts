@@ -112,7 +112,9 @@ export function formatCaption(
 
   return [
     ...statusLine,
-    `🔥 <b>${currency.format(deal.currentPrice)}${discount} - ${escapeHtml(deal.title)}</b>`,
+    `🔥 <b>${currency.format(deal.currentPrice)}${discount}</b>`,
+    "",
+    `<b>${escapeHtml(deal.title)}</b>`,
     ...score,
     ...coupon,
     "",

@@ -12,10 +12,10 @@ const baseDeal: Deal = {
 };
 
 describe("formatCaption", () => {
-  it("coloca preco, desconto e produto na primeira linha", () => {
+  it("coloca preco/desconto no topo e produto em destaque abaixo", () => {
     const caption = formatCaption({ ...baseDeal, discountPercentage: 31 }, baseDeal.originalUrl);
 
-    expect(caption).toContain("🔥 <b>R$ 299,90 (-31%) - SSD NVMe 1 TB</b>");
+    expect(caption).toContain("🔥 <b>R$ 299,90 (-31%)</b>\n\n<b>SSD NVMe 1 TB</b>");
   });
 
   it("adiciona a categoria no novo layout", () => {
