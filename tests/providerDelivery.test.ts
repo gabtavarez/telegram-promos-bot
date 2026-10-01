@@ -142,6 +142,32 @@ describe("provider delivery checks", () => {
     expect(deals[0]?.originalUrl).toBe("https://www.kabum.com.br/produto/123456/placa-de-video-rtx-4060");
   });
 
+  it("extracts only quality Kabum deals from the generated Awin CSV feed URL", async () => {
+    axiosMocks.get.mockResolvedValue({
+      data: [
+        "aw_deep_link,product_name,aw_product_id,merchant_product_id,merchant_image_url,search_price,store_price,in_stock,condition",
+        "\"https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&p=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F123456\",\"SSD NVMe Kingston 1TB M.2 PCIe 4.0\",123456,KABUM123,\"https://example.com/ssd.jpg\",349.90,349.90,1,new",
+        "\"https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&p=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F999999\",\"Filtro de Poeira Magnetico para Gabinete\",999999,KABUM999,\"https://example.com/filter.jpg\",9.90,9.90,1,new",
+      ].join("\n"),
+    });
+
+    const deals = await new KabumProvider({
+      publisherId: "3108044",
+      advertiserId: "17729",
+      feedUrl: "https://productdata.awin.com/datafeed/download/apikey/secret",
+      locale: "pt_BR",
+    }).getDeals();
+
+    expect(axiosMocks.get).toHaveBeenCalledWith("https://productdata.awin.com/datafeed/download/apikey/secret");
+    expect(deals).toHaveLength(1);
+    expect(deals[0]).toMatchObject({
+      id: "kabum:123456",
+      provider: "kabum",
+      originalUrl: "https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&p=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F123456",
+      currentPrice: 349.9,
+    });
+  });
+
   it("extracts only quality Shopee deals with tracked offer links", async () => {
     axiosMocks.post.mockResolvedValue({
       data: {

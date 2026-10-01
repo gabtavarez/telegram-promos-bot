@@ -7,7 +7,8 @@ import type { AffiliateProvider } from "./AffiliateProvider.js";
 interface KabumConfig {
   publisherId: string;
   advertiserId: string;
-  accessToken: string;
+  accessToken?: string;
+  feedUrl?: string;
   locale: string;
 }
 
@@ -36,16 +37,14 @@ export class KabumProvider implements AffiliateProvider {
       baseURL: "https://api.awin.com",
       timeout: 30_000,
       maxContentLength: 50 * 1024 * 1024,
-      headers: { Authorization: `Bearer ${config.accessToken}` },
+      headers: config.accessToken ? { Authorization: `Bearer ${config.accessToken}` } : undefined,
       responseType: "text",
     });
   }
 
   async getDeals(): Promise<Deal[]> {
     try {
-      const path = `/publishers/${this.config.publisherId}/awinfeeds/download/${this.config.advertiserId}-retail-${this.config.locale}.jsonl`;
-      const { data } = await this.client.get<string>(path);
-      const records = parseJsonLines(data);
+      const records = await this.fetchFeedRecords();
       const deals = records.flatMap((record): Deal[] => {
         if (record.error) throw new Error(record.message ?? `Awin feed error ${record.error}`);
 
@@ -86,6 +85,17 @@ export class KabumProvider implements AffiliateProvider {
       return [];
     }
   }
+
+  private async fetchFeedRecords(): Promise<AwinFeedRecord[]> {
+    if (this.config.feedUrl) {
+      const { data } = await this.client.get<string>(this.config.feedUrl);
+      return parseCsvFeed(data);
+    }
+
+    const path = `/publishers/${this.config.publisherId}/awinfeeds/download/${this.config.advertiserId}-retail-${this.config.locale}.jsonl`;
+    const { data } = await this.client.get<string>(path);
+    return parseJsonLines(data);
+  }
 }
 
 function parseJsonLines(data: string): AwinFeedRecord[] {
@@ -99,7 +109,17 @@ function parseJsonLines(data: string): AwinFeedRecord[] {
 
 function flattenProduct(record: AwinFeedRecord): AwinFeedProduct {
   const sections = Object.values(record).filter(isRecord);
-  return Object.assign({}, ...sections, record) as AwinFeedProduct;
+  const flat = Object.assign({}, ...sections, record) as Record<string, unknown>;
+  return {
+    id: pickValue(flat, "aw_product_id", "merchant_product_id", "id"),
+    title: pickValue(flat, "product_name", "title"),
+    link: pickValue(flat, "aw_deep_link", "link", "merchant_deep_link"),
+    image_link: pickValue(flat, "merchant_image_url", "aw_image_url", "image_link"),
+    price: pickValue(flat, "search_price", "display_price", "store_price", "price"),
+    sale_price: pickValue(flat, "store_price", "sale_price"),
+    availability: pickValue(flat, "in_stock", "stock_status", "availability"),
+    condition: pickValue(flat, "condition"),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -116,6 +136,73 @@ function parseFeedPrice(value?: string | number): number | undefined {
     : match.replace(",", ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function parseCsvFeed(data: string): AwinFeedRecord[] {
+  const rows = parseCsvRows(data.replace(/^\uFEFF/, ""));
+  const [header, ...records] = rows;
+  if (!header) return [];
+
+  return records
+    .filter((row) => row.some((value) => value.trim()))
+    .map((row) =>
+      Object.fromEntries(header.map((column, index) => [column.trim(), row[index]?.trim() ?? ""])) as AwinFeedRecord,
+    );
+}
+
+function parseCsvRows(data: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+
+  for (let index = 0; index < data.length; index += 1) {
+    const char = data[index];
+    const next = data[index + 1];
+
+    if (char === "\"") {
+      if (quoted && next === "\"") {
+        field += "\"";
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+
+    if (char === "," && !quoted) {
+      row.push(field);
+      field = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      continue;
+    }
+
+    field += char;
+  }
+
+  if (field || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function pickValue(record: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value;
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
 }
 
 function normalizeText(value?: string): string {

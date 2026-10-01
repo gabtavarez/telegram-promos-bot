@@ -40,6 +40,7 @@ const envSchema = z.object({
     (value) => (value === "" ? undefined : value),
     z.string().regex(/^\d+$/).optional(),
   ),
+  KABUM_AWIN_FEED_URL: optionalUrl,
   KABUM_AWIN_FEED_LOCALE: z.string().regex(/^[a-z]{2}_[A-Z]{2}$/).default("pt_BR"),
   KABUM_CLICK_REF: z.string().default("telegram_canal"),
   AWIN_COUPONS_ENABLED: booleanFromString(false),
@@ -88,6 +89,13 @@ const envSchema = z.object({
     {
       message: "KABUM_AWIN_ADVERTISER_ID e AWIN_PUBLISHER_ID sao obrigatorios quando KABUM_ENABLED=true",
       path: ["KABUM_AWIN_ADVERTISER_ID"],
+    },
+  )
+  .refine(
+    (value) => !value.KABUM_ENABLED || Boolean(value.KABUM_AWIN_FEED_URL || value.AWIN_ACCESS_TOKEN),
+    {
+      message: "KABUM_AWIN_FEED_URL ou AWIN_ACCESS_TOKEN sao obrigatorios quando KABUM_ENABLED=true",
+      path: ["KABUM_AWIN_FEED_URL"],
     },
   );
 
