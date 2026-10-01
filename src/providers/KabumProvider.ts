@@ -1,3 +1,4 @@
+import { gunzipSync } from "node:zlib";
 import axios, { type AxiosInstance } from "axios";
 import type { Deal } from "../types/Deal.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
@@ -47,7 +48,6 @@ export class KabumProvider implements AffiliateProvider {
       timeout: 30_000,
       maxContentLength: 50 * 1024 * 1024,
       headers: config.accessToken ? { Authorization: `Bearer ${config.accessToken}` } : undefined,
-      responseType: "text",
     });
   }
 
@@ -130,8 +130,8 @@ export class KabumProvider implements AffiliateProvider {
     if (this.config.feedUrl) {
       this.feedSource = "feed manual";
       try {
-        const { data } = await this.client.get<string>(this.config.feedUrl);
-        return parseCsvFeed(data);
+        const { data } = await this.client.get<ArrayBuffer>(this.config.feedUrl, { responseType: "arraybuffer" });
+        return parseCsvFeed(decodeFeedData(data));
       } catch (error) {
         if (!this.config.accessToken) throw error;
         const message = axios.isAxiosError(error)
@@ -145,9 +145,20 @@ export class KabumProvider implements AffiliateProvider {
 
     this.feedSource = "feed automatico";
     const path = `/publishers/${this.config.publisherId}/awinfeeds/download/${this.config.advertiserId}-retail-${this.config.locale}.jsonl`;
-    const { data } = await this.client.get<string>(path);
+    const { data } = await this.client.get<string>(path, { responseType: "text" });
     return parseJsonLines(data);
   }
+}
+
+function decodeFeedData(data: ArrayBuffer | Buffer | string): string {
+  if (typeof data === "string") return data;
+  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  const content = isGzip(buffer) ? gunzipSync(buffer) : buffer;
+  return content.toString("utf8");
+}
+
+function isGzip(buffer: Buffer): boolean {
+  return buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
 }
 
 function parseJsonLines(data: string): AwinFeedRecord[] {

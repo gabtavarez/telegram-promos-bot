@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { gzipSync } from "node:zlib";
 
 const httpMocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -144,11 +145,11 @@ describe("provider delivery checks", () => {
 
   it("extracts only quality Kabum deals from the generated Awin CSV feed URL", async () => {
     axiosMocks.get.mockResolvedValue({
-      data: [
+      data: Buffer.from([
         "aw_deep_link,product_name,aw_product_id,merchant_product_id,merchant_image_url,search_price,store_price,in_stock,condition",
         "\"https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&p=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F123456\",\"SSD NVMe Kingston 1TB M.2 PCIe 4.0\",123456,KABUM123,\"https://example.com/ssd.jpg\",349.90,349.90,1,new",
         "\"https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&p=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F999999\",\"Filtro de Poeira Magnetico para Gabinete\",999999,KABUM999,\"https://example.com/filter.jpg\",9.90,9.90,1,new",
-      ].join("\n"),
+      ].join("\n")),
     });
 
     const deals = await new KabumProvider({
@@ -158,7 +159,10 @@ describe("provider delivery checks", () => {
       locale: "pt_BR",
     }).getDeals();
 
-    expect(axiosMocks.get).toHaveBeenCalledWith("https://productdata.awin.com/datafeed/download/apikey/secret");
+    expect(axiosMocks.get).toHaveBeenCalledWith(
+      "https://productdata.awin.com/datafeed/download/apikey/secret",
+      { responseType: "arraybuffer" },
+    );
     expect(deals).toHaveLength(1);
     expect(deals[0]).toMatchObject({
       id: "kabum:123456",
@@ -170,10 +174,10 @@ describe("provider delivery checks", () => {
 
   it("extracts Kabum deals from semicolon-separated Awin CSV feeds", async () => {
     axiosMocks.get.mockResolvedValue({
-      data: [
+      data: Buffer.from([
         "aw_deep_link;product_name;aw_product_id;merchant_image_url;search_price",
         "\"https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&p=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F456\";\"Processador AMD Ryzen 7 5700X3D AM4\";456;\"https://example.com/ryzen.jpg\";1161.00",
-      ].join("\n"),
+      ].join("\n")),
     });
 
     const deals = await new KabumProvider({
@@ -188,6 +192,29 @@ describe("provider delivery checks", () => {
       id: "kabum:456",
       provider: "kabum",
       currentPrice: 1161,
+    });
+  });
+
+  it("extracts Kabum deals from gzip-compressed Awin CSV feeds", async () => {
+    axiosMocks.get.mockResolvedValue({
+      data: gzipSync([
+        "aw_deep_link,product_name,aw_product_id,merchant_image_url,search_price",
+        "\"https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&p=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F789\",\"Placa Mae Asus Prime B550M-A DDR4 AM4\",789,\"https://example.com/b550.jpg\",699.90",
+      ].join("\n")),
+    });
+
+    const deals = await new KabumProvider({
+      publisherId: "3108044",
+      advertiserId: "17729",
+      feedUrl: "https://productdata.awin.com/datafeed/download/apikey/secret",
+      locale: "pt_BR",
+    }).getDeals();
+
+    expect(deals).toHaveLength(1);
+    expect(deals[0]).toMatchObject({
+      id: "kabum:789",
+      provider: "kabum",
+      currentPrice: 699.9,
     });
   });
 
