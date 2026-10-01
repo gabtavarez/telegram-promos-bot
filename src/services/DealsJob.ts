@@ -7,6 +7,7 @@ import { TelegramPublisher } from "./TelegramPublisher.js";
 import type { CouponProvider } from "../coupons/CouponProvider.js";
 import { findCouponForDeal } from "../coupons/CouponMatcher.js";
 import type { Coupon } from "../coupons/CouponProvider.js";
+import { isDealAvailable } from "./DealAvailabilityChecker.js";
 
 export class DealsJob {
   private running = false;
@@ -46,7 +47,7 @@ export class DealsJob {
         }
       }
 
-      const best = selectBestDeal(available);
+      const best = await selectFirstAvailableDeal(available);
       if (!best) {
         console.log("Nenhuma oferta nova encontrada neste ciclo.");
         return "no-deal";
@@ -90,10 +91,14 @@ export class DealsJob {
   }
 
   async search(query: string, limit = 3): Promise<DealSearchResult[]> {
-    const deals = (await this.collectDeals())
+    const candidates = (await this.collectDeals())
       .filter((deal) => matchesDealSearch(deal, query))
-      .sort(compareDeals)
-      .slice(0, limit);
+      .sort(compareDeals);
+    const deals: Deal[] = [];
+    for (const deal of candidates) {
+      if (await isDealAvailable(deal)) deals.push(deal);
+      if (deals.length >= limit) break;
+    }
     const results: DealSearchResult[] = [];
 
     for (const deal of deals) {
@@ -107,7 +112,7 @@ export class DealsJob {
 
   async testSend(): Promise<void> {
     const deals = await this.collectDeals();
-    const best = selectBestDeal(deals);
+    const best = await selectFirstAvailableDeal(deals);
     if (!best) {
       console.log("Nenhuma oferta encontrada para teste.");
       return;
@@ -159,6 +164,13 @@ export interface DealSearchResult {
 
 export function selectBestDeal(deals: Deal[]): Deal | undefined {
   return [...deals].sort(compareDeals)[0];
+}
+
+async function selectFirstAvailableDeal(deals: Deal[]): Promise<Deal | undefined> {
+  for (const deal of [...deals].sort(compareDeals)) {
+    if (await isDealAvailable(deal)) return deal;
+  }
+  return undefined;
 }
 
 export function matchesDealSearch(deal: Deal, query: string): boolean {
