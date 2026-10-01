@@ -16,6 +16,7 @@ const HARDWARE_TERMS = [
   // Perifericos
   /\b(mouse\s+gamer|mousepad|teclado\s+(?:mec[aâ]nico|magn[eé]tico|hall\s*effect|60\s*%|68\s*%|75\s*%|100\s*%|tkl|gamer)|headset|fone\s+gamer|microfone\s+condenser)(?=\s|$|[,:;()\-])/i,
   /\b(monitor\s+(?:gamer|ultrawide|144hz|165hz|240hz|alta\s+taxa|alta\s+frequ[eê]ncia)|ultrawide|144hz|165hz|240hz)\b/i,
+  /\bcadeira\s+(?:ergon[oô]mica|gamer|de\s+escrit[oó]rio)\b/i,
 
   // TVs boas para setup/sala gamer: smart, 4K/painel premium e tela grande
   QUALITY_TV_TERM,
@@ -78,6 +79,7 @@ const QUALITY_SIGNALS = [
   /\b(dpi|paw\s?3395|hero|lightspeed|hot\s*swap|pwm|argb|120mm|140mm|heatpipe|screenbar|dock\s+station)\b/i,
   /\b(mx-?[46]|kryonaut|nt-h[12]|xtm(?:50|70)|mastergel|thermal\s+grizzly)\b/i,
   /\b(bra[cç]o\s+articulado|pegboard|painel\s+perfurado|suporte\s+para\s+(?:headset|notebook)|cabo(?:s)?\s+extensor(?:es)?\s+sleeved)\b/i,
+  /\b(ergon[oô]mica|apoio\s+lombar|encosto\s+mesh|bra[cç]o\s+[234]d|ajuste\s+de\s+altura|girat[oó]ria)\b/i,
 ];
 
 export function isPcHardwareDeal(title: string): boolean {

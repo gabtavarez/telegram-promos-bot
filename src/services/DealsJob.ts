@@ -20,6 +20,7 @@ export class DealsJob {
   private lastPublishedTitle?: string;
   private readonly recentProviders: ProviderName[] = [];
   private cycleCount = 0;
+  private legacyButtonsCleaned = false;
 
   constructor(
     private readonly providers: AffiliateProvider[],
@@ -41,6 +42,14 @@ export class DealsJob {
 
     this.running = true;
     try {
+      if (!this.legacyButtonsCleaned) {
+        try {
+          await this.cleanupLegacyCommunityButtons();
+          this.legacyButtonsCleaned = true;
+        } catch (error) {
+          console.warn("Nao foi possivel remover botoes comunitarios antigos neste ciclo.", error);
+        }
+      }
       const discovered = await this.collectDeals();
       const qualityCandidates = discovered.filter(isQualityCandidate);
       const history = await this.recordPriceHistorySafely(qualityCandidates);
@@ -49,7 +58,8 @@ export class DealsJob {
       const available = await this.store.filterUnposted(qualifiedDeals);
       console.log(
         `Filtro final: ${qualityCandidates.length} produto(s) de qualidade; ` +
-          `${qualifiedDeals.length} promo(s) media(s)/boa(s).`,
+          `${qualifiedDeals.length} promo(s) media(s)/boa(s); ` +
+          `${available.length} nova(s) apos o historico de 24h.`,
       );
 
       await this.notifyAlerts(qualifiedDeals);
@@ -282,6 +292,16 @@ export class DealsJob {
     const updated = { ...offer, status: "soldout" as const };
     await this.publisher.editPublishedOffer(updated);
     await this.store.updatePublishedOffer(updated);
+  }
+
+  private async cleanupLegacyCommunityButtons(): Promise<void> {
+    const offers = (await this.store.getPublishedOffers(20)).slice(0, 20);
+    for (let index = 0; index < offers.length; index += 4) {
+      await Promise.all(offers.slice(index, index + 4).map((offer) =>
+        this.publisher.removeCommunityButtons(offer).catch(() => undefined),
+      ));
+    }
+    if (offers.length > 0) console.log(`Botoes comunitarios removidos de ${offers.length} publicacao(oes) recente(s).`);
   }
 
   private rememberProvider(provider: ProviderName): void {

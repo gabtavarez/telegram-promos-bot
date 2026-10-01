@@ -18,12 +18,20 @@ const PRODUCT_FIELDS = [
 ].join(",");
 const HARDWARE_KEYWORDS = [
   "graphics card",
+  "RX 7600 graphics card",
   "processor",
   "SSD NVMe",
   "DDR5 RAM",
   "motherboard",
   "PC power supply",
   "PC case",
+  "CPU air cooler ARGB",
+  "AG400 CPU cooler",
+  "mechanical keyboard",
+  "magnetic keyboard hall effect",
+  "gaming mouse PAW3395",
+  "monitor arm",
+  "USB dock station",
 ];
 
 interface AliExpressConfig {
@@ -93,8 +101,10 @@ export class AliExpressProvider implements AffiliateProvider {
 
   async getDeals(): Promise<Deal[]> {
     try {
-      const queryResults = await Promise.allSettled(
-        HARDWARE_KEYWORDS.map((keyword) => this.queryProducts(keyword)),
+      const queryResults = await settleWithConcurrency(
+        HARDWARE_KEYWORDS,
+        4,
+        (keyword) => this.queryProductsWithRetry(keyword),
       );
       const failedQueries = queryResults.filter((result) => result.status === "rejected");
       if (failedQueries.length > 0) {
@@ -155,7 +165,7 @@ export class AliExpressProvider implements AffiliateProvider {
       fields: PRODUCT_FIELDS,
       keywords: keyword,
       page_no: "1",
-      page_size: "10",
+      page_size: "20",
       sort: "LAST_VOLUME_DESC",
       target_currency: "BRL",
       target_language: "PT",
@@ -171,7 +181,32 @@ export class AliExpressProvider implements AffiliateProvider {
     return result.result?.products?.product ?? [];
   }
 
+  private async queryProductsWithRetry(keyword: string): Promise<AliExpressProduct[]> {
+    try {
+      return await this.queryProducts(keyword);
+    } catch (error) {
+      await delay(400);
+      try {
+        return await this.queryProducts(keyword);
+      } catch {
+        throw error;
+      }
+    }
+  }
+
   private async generateAffiliateLinks(sourceUrls: string[]): Promise<Map<string, string>> {
+    const results = await Promise.allSettled(
+      chunk(sourceUrls, 20).map((batch) => this.generateAffiliateLinkBatch(batch)),
+    );
+    const generated = new Map<string, string>();
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      for (const [source, affiliate] of result.value) generated.set(source, affiliate);
+    }
+    return generated;
+  }
+
+  private async generateAffiliateLinkBatch(sourceUrls: string[]): Promise<Map<string, string>> {
     const response = await this.callApi<LinkGenerateResponse>("aliexpress.affiliate.link.generate", {
       promotion_link_type: "0",
       source_values: sourceUrls.join(","),
@@ -209,6 +244,38 @@ export class AliExpressProvider implements AffiliateProvider {
     const response = await this.client.post<T>("", new URLSearchParams(params));
     return response.data;
   }
+}
+
+function chunk<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) chunks.push(values.slice(index, index + size));
+  return chunks;
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function settleWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  operation: (value: T) => Promise<R>,
+): Promise<Array<PromiseSettledResult<R>>> {
+  const results = new Array<PromiseSettledResult<R>>(values.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      try {
+        results[index] = { status: "fulfilled", value: await operation(values[index]!) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function signRequest(params: Record<string, string>, secret: string): string {

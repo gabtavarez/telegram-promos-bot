@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { Bot, InlineKeyboard } from "grammy";
 import type { Deal } from "../types/Deal.js";
 import type {
-  FeedbackCounts,
   PublishedMessageType,
   PublishedOffer,
   PublishedOfferStatus,
@@ -20,7 +19,7 @@ export class TelegramPublisher {
   async publish(deal: Deal, affiliateUrl: string): Promise<PublishedMessageReference> {
     const feedbackKey = getFeedbackKey(deal.id);
     const caption = formatCaption(deal, affiliateUrl);
-    const keyboard = buildOfferKeyboard(affiliateUrl, feedbackKey);
+    const keyboard = buildOfferKeyboard(affiliateUrl);
     try {
       const message = await this.bot.api.sendPhoto(this.channelId, deal.imageUrl, {
         caption,
@@ -43,7 +42,7 @@ export class TelegramPublisher {
     const caption = formatCaption(offer.deal, offer.affiliateUrl, offer.status);
     const keyboard = offer.status === "soldout"
       ? new InlineKeyboard()
-      : buildOfferKeyboard(offer.affiliateUrl, offer.feedbackKey);
+      : buildOfferKeyboard(offer.affiliateUrl);
     if (offer.messageType === "photo") {
       await this.bot.api.editMessageCaption(this.channelId, offer.messageId, {
         caption,
@@ -57,6 +56,11 @@ export class TelegramPublisher {
       link_preview_options: { is_disabled: false },
       reply_markup: keyboard,
     });
+  }
+
+  async removeCommunityButtons(offer: PublishedOffer): Promise<void> {
+    const keyboard = offer.status === "soldout" ? new InlineKeyboard() : buildOfferKeyboard(offer.affiliateUrl);
+    await this.bot.api.editMessageReplyMarkup(this.channelId, offer.messageId, { reply_markup: keyboard });
   }
 
   async sendPrivateAlert(userId: string, deal: Deal, affiliateUrl: string): Promise<void> {
@@ -127,17 +131,8 @@ export function formatCaption(
   ].join("\n");
 }
 
-export function buildOfferKeyboard(
-  affiliateUrl: string,
-  feedbackKey: string,
-  counts: FeedbackCounts = { worth: 0, soldout: 0, bad: 0 },
-): InlineKeyboard {
-  return new InlineKeyboard()
-    .url("✅ VER OFERTA", affiliateUrl)
-    .row()
-    .text(`👍 Vale a pena${formatCount(counts.worth)}`, `fb:worth:${feedbackKey}`)
-    .text(`⚠️ Esgotou${formatCount(counts.soldout)}`, `fb:soldout:${feedbackKey}`)
-    .text(`👎 Preço ruim${formatCount(counts.bad)}`, `fb:bad:${feedbackKey}`);
+export function buildOfferKeyboard(affiliateUrl: string): InlineKeyboard {
+  return new InlineKeyboard().url("✅ VER OFERTA", affiliateUrl);
 }
 
 export function getFeedbackKey(dealId: string): string {
@@ -168,6 +163,7 @@ export function getCategoryHashtag(title: string): string {
     [/\b(teclado|keyboard|tkl)\b/, "#Teclado"],
     [/\b(headset|fone gamer|microfone)\b/, "#Audio"],
     [/\b(monitor|ultrawide|screenbar)\b/, "#Monitor"],
+    [/\b(cadeira\s+(?:ergonomica|gamer|de escritorio))\b/, "#Cadeira"],
   ];
 
   return categories.find(([pattern]) => pattern.test(normalized))?.[1] ?? "#Setup";
@@ -188,10 +184,6 @@ function formatPriceHistory(deal: Deal): string[] {
     lines.push(`🏆 Menor preço em ${history.observationDays} dia(s) monitorado(s)`);
   }
   return lines;
-}
-
-function formatCount(value: number): string {
-  return value > 0 ? ` (${value})` : "";
 }
 
 export interface PublishedMessageReference {

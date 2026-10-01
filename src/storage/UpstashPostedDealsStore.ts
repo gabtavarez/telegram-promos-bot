@@ -30,6 +30,7 @@ export class UpstashPostedDealsStore implements DealsStore {
     baseUrl: string,
     token: string,
     private readonly retentionSeconds = 7 * 24 * 60 * 60,
+    private readonly repostCooldownMs = 24 * 60 * 60 * 1_000,
   ) {
     this.client = axios.create({
       baseURL: baseUrl.replace(/\/$/, ""),
@@ -49,7 +50,11 @@ export class UpstashPostedDealsStore implements DealsStore {
     const keys = deals.flatMap((deal) => [redisKey(deal.id), redisKey(deal.originalUrl)]);
     const values = await this.command<Array<string | null>>(["MGET", ...keys]);
 
-    return deals.filter((_, index) => values[index * 2] === null && values[index * 2 + 1] === null);
+    const now = Date.now();
+    return deals.filter((_, index) =>
+      !wasPostedRecently(values[index * 2], now, this.repostCooldownMs) &&
+      !wasPostedRecently(values[index * 2 + 1], now, this.repostCooldownMs),
+    );
   }
 
   async markPosted(id: string, originalUrl: string, now = new Date()): Promise<void> {
@@ -206,4 +211,10 @@ function countFeedback(votes: Record<string, FeedbackType>): FeedbackCounts {
   const counts: FeedbackCounts = { worth: 0, soldout: 0, bad: 0 };
   for (const type of Object.values(votes)) counts[type] += 1;
   return counts;
+}
+
+function wasPostedRecently(value: string | null | undefined, now: number, cooldownMs: number): boolean {
+  if (!value) return false;
+  const timestamp = Date.parse(value);
+  return !Number.isFinite(timestamp) || now - timestamp < cooldownMs;
 }

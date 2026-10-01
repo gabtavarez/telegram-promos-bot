@@ -7,16 +7,24 @@ import type { AffiliateProvider } from "./AffiliateProvider.js";
 const API_URL = "https://open-api.affiliate.shopee.com.br/graphql";
 const HARDWARE_KEYWORDS = [
   "placa de video",
+  "placa de video rx 7600",
+  "placa de video rtx 4060",
   "processador ryzen",
   "ssd nvme",
   "memoria ram ddr5",
   "placa mae",
   "fonte 80 plus",
   "gabinete gamer",
+  "air cooler cpu argb",
+  "water cooler cpu",
   "teclado mecanico",
   "mouse gamer",
   "headset gamer",
   "monitor gamer",
+  "monitor 180hz",
+  "cadeira ergonomica escritorio mesh",
+  "braco articulado monitor",
+  "notebook ryzen 16gb ssd",
   "smart tv 4k 50",
 ];
 

@@ -31,7 +31,7 @@ No chat privado com o bot, qualquer usuário pode criar alertas com `/alerta RTX
 
 O administrador também pode usar `/oferta`, `/teste`, `/status`, `/buscar SSD`, `/cupons`, `/pausar` e `/retomar`. O comando `/teste` envia uma amostra ao canal sem registrar o produto como uma nova publicação.
 
-O bot mantém histórico diário de preços por até 90 dias, calcula o Tavarez Score, recebe votos da comunidade e revisa até oito publicações recentes a cada seis ciclos. Às 20h, no horário de São Paulo, publica automaticamente um resumo com as cinco melhores ofertas das últimas 24 horas.
+O bot mantém histórico diário de preços por até 90 dias, calcula o Tavarez Score e revisa até oito publicações recentes a cada seis ciclos. O mesmo produto pode reaparecer depois de 24 horas, desde que continue aprovado pelo filtro. Às 20h, no horário de São Paulo, publica automaticamente um resumo com as cinco melhores ofertas das últimas 24 horas.
 
 ```bash
 npm run dev       # desenvolvimento

@@ -1,6 +1,6 @@
 import { Bot, InlineKeyboard } from "grammy";
 import type { DealsJob, JobRunResult } from "./DealsJob.js";
-import { buildOfferKeyboard, formatCaption } from "./TelegramPublisher.js";
+import { formatCaption } from "./TelegramPublisher.js";
 
 export class TelegramAdminBot {
   private readonly bot: Bot;
@@ -104,27 +104,6 @@ export class TelegramAdminBot {
       }
       const removed = await this.job.removeAlert(String(context.from?.id), id);
       await context.reply(removed ? "✅ Alerta removido." : "ℹ️ Alerta não encontrado.");
-    });
-
-    this.bot.callbackQuery(/^fb:(worth|soldout|bad):([a-f0-9]{16})$/, async (context) => {
-      const [, type, feedbackKey] = context.match;
-      const result = await this.job.recordFeedback(
-        feedbackKey!,
-        String(context.from.id),
-        type as "worth" | "soldout" | "bad",
-      );
-      const message = context.callbackQuery.message;
-      if (message && result.offer && result.offer.status !== "soldout") {
-        await context.api.editMessageReplyMarkup(message.chat.id, message.message_id, {
-          reply_markup: buildOfferKeyboard(result.offer.affiliateUrl, feedbackKey!, result.counts),
-        }).catch(() => undefined);
-      }
-      const texts = {
-        worth: "👍 Obrigado! Seu voto foi registrado.",
-        soldout: "⚠️ Obrigado! Vamos verificar o estoque.",
-        bad: "👎 Obrigado! Isso ajudará a melhorar o filtro.",
-      } as const;
-      await context.answerCallbackQuery({ text: texts[type as keyof typeof texts] });
     });
 
     this.bot.command("oferta", async (context) => {

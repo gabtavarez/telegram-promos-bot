@@ -18,6 +18,7 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Braco articulado para monitor")).toBe(true);
     expect(isPcHardwareDeal("Fans ARGB 120mm para gabinete")).toBe(true);
     expect(isPcHardwareDeal("Luminaria de mesa ScreenBar para monitor")).toBe(true);
+    expect(isPcHardwareDeal("Cadeira Ergonômica de Escritório Giratória com Encosto Mesh e Apoio Lombar")).toBe(true);
   });
 
   it("blocks Mancer products and complete computers", () => {

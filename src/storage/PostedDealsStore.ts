@@ -43,7 +43,7 @@ export class PostedDealsStore implements DealsStore {
   private records: PostedDeals = {};
   private state: LocalBotState = emptyState();
 
-  constructor(filePath: string, private readonly retentionMs = 7 * 24 * 60 * 60 * 1_000) {
+  constructor(filePath: string, private readonly retentionMs = 24 * 60 * 60 * 1_000) {
     this.filePath = resolve(filePath);
     this.statePath = `${this.filePath}.state.json`;
   }

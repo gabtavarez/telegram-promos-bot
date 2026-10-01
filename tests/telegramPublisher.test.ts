@@ -76,13 +76,9 @@ describe("formatCaption", () => {
     expect(caption).toContain("Menor preço em 12 dia(s)");
   });
 
-  it("inclui botoes de voto comunitario", () => {
-    const keyboard = buildOfferKeyboard(baseDeal.originalUrl, "0123456789abcdef", {
-      worth: 3,
-      soldout: 1,
-      bad: 0,
-    });
-    expect(JSON.stringify(keyboard)).toContain("Vale a pena (3)");
-    expect(JSON.stringify(keyboard)).toContain("fb:soldout:0123456789abcdef");
+  it("mantem apenas o botao principal da oferta", () => {
+    const keyboard = buildOfferKeyboard(baseDeal.originalUrl);
+    expect(JSON.stringify(keyboard)).toContain("VER OFERTA");
+    expect(JSON.stringify(keyboard)).not.toContain("Vale a pena");
   });
 });
