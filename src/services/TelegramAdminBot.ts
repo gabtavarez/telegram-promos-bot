@@ -19,6 +19,7 @@ export class TelegramAdminBot {
     ];
     const adminCommands = [
       { command: "oferta", description: "Publicar uma oferta agora" },
+      { command: "teste", description: "Testar o novo modelo de mensagem" },
       { command: "status", description: "Ver o estado do bot" },
       { command: "buscar", description: "Buscar ofertas por termo" },
       { command: "cupons", description: "Listar cupons ativos" },
@@ -131,6 +132,13 @@ export class TelegramAdminBot {
       await context.reply("🔎 Buscando uma oferta para publicar...");
       const result = await this.job.run(true);
       await context.reply(runResultMessage(result));
+    });
+
+    this.bot.command("teste", async (context) => {
+      if (!(await this.requireAdmin(context))) return;
+      await context.reply("🧪 Preparando uma mensagem de teste...");
+      await this.job.testSend();
+      await context.reply("✅ Mensagem de teste enviada ao canal sem alterar o histórico.");
     });
 
     this.bot.command("status", async (context) => {
