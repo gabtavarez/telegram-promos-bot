@@ -21,7 +21,7 @@ Preencha no `.env`:
 - `ML_TAG`: parâmetros de rastreio do Mercado Livre em formato de query string, como `matt_tool=123&matt_word=hardware`.
 - `CRON_SCHEDULE`: frequência de busca das ofertas. Use `*/5 * * * *` para verificar a cada cinco minutos.
 
-Para buscar cupons oficiais ativos na Awin, configure `AWIN_COUPONS_ENABLED=true`, `AWIN_PUBLISHER_ID` e `AWIN_ACCESS_TOKEN`. A variável opcional `AWIN_ADVERTISER_IDS` aceita IDs separados por vírgula, como `75796`, para limitar a busca às lojas desejadas.
+Para buscar cupons oficiais ativos na Awin, configure `AWIN_PUBLISHER_ID` e `AWIN_ACCESS_TOKEN`. A integração é ativada automaticamente quando ambos existem. `AWIN_COUPONS_ENABLED=false` pode desativá-la explicitamente. A variável opcional `AWIN_ADVERTISER_IDS` aceita IDs separados por vírgula para limitar a busca às lojas desejadas.
 
 As URLs das páginas monitoradas (por padrão, ofertas de informática/hardware), o caminho do histórico e a execução imediata ao iniciar também podem ser alterados pelas variáveis opcionais documentadas em `.env.example`. A Amazon fica desativada por padrão; só use `AMAZON_ENABLED=true` depois de confirmar que a coleta e a divulgação cumprem as regras da sua conta de Associado.
 

@@ -169,10 +169,25 @@ export class TelegramAdminBot {
 
     this.bot.command("cupons", async (context) => {
       if (!(await this.requireAdmin(context))) return;
+      const initialStatus = this.job.getCouponIntegrationStatus();
+      if (!initialStatus.enabled) {
+        await context.reply([
+          "⚠️ A busca de cupons Awin não está ativa.",
+          "Configure AWIN_ACCESS_TOKEN e AWIN_PUBLISHER_ID no Render.",
+          "O feed de produtos da KaBuM, sozinho, não fornece os cupons da Awin.",
+        ].join("\n"));
+        return;
+      }
+
       await context.reply("🎟️ Consultando cupons ativos...");
       const coupons = await this.job.getActiveCoupons();
       if (coupons.length === 0) {
-        await context.reply("ℹ️ Nenhum cupom ativo encontrado ou a integração Awin está desativada.");
+        const status = this.job.getCouponIntegrationStatus();
+        await context.reply(status.error
+          ? `❌ A Awin não pôde ser consultada (${escapeHtml(status.error.slice(0, 180))}). Confira o token e os logs do Render.`
+          : "ℹ️ A Awin respondeu normalmente, mas não há cupons com código ativos para os anunciantes afiliados neste momento.",
+          { parse_mode: "HTML" },
+        );
         return;
       }
 

@@ -34,6 +34,7 @@ export class AwinCouponProvider implements CouponProvider {
   private readonly client: AxiosInstance;
   private cache: Coupon[] = [];
   private cacheExpiresAt = 0;
+  private lastError?: string;
 
   constructor(private readonly config: AwinCouponConfig) {
     this.client = axios.create({
@@ -59,6 +60,7 @@ export class AwinCouponProvider implements CouponProvider {
 
       this.cache = offers.flatMap(normalizeAwinOffer);
       this.cacheExpiresAt = Date.now() + CACHE_DURATION_MS;
+      this.lastError = undefined;
       console.log(`Awin: ${this.cache.length} cupom(ns) ativo(s) encontrado(s).`);
       return this.cache;
     } catch (error) {
@@ -67,9 +69,14 @@ export class AwinCouponProvider implements CouponProvider {
         : error instanceof Error
           ? error.message
           : String(error);
+      this.lastError = message;
       console.error(`Falha ao consultar cupons da Awin: ${message}`);
       return this.cache;
     }
+  }
+
+  getLastError(): string | undefined {
+    return this.lastError;
   }
 
   private async fetchPage(page: number): Promise<AwinOffer[]> {

@@ -13,4 +13,5 @@ export interface Coupon {
 export interface CouponProvider {
   readonly name: string;
   getActiveCoupons(): Promise<Coupon[]>;
+  getLastError?(): string | undefined;
 }

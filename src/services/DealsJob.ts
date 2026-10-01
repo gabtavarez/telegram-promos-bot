@@ -119,6 +119,14 @@ export class DealsJob {
     return this.couponProvider?.getActiveCoupons() ?? [];
   }
 
+  getCouponIntegrationStatus(): CouponIntegrationStatus {
+    return {
+      enabled: Boolean(this.couponProvider),
+      provider: this.couponProvider?.name,
+      error: this.couponProvider?.getLastError?.(),
+    };
+  }
+
   async search(query: string, limit = 3): Promise<DealSearchResult[]> {
     const collected = await this.collectDeals();
     const qualityCandidates = collected.filter(isQualityCandidate);
@@ -308,6 +316,12 @@ export class DealsJob {
     this.recentProviders.unshift(provider);
     if (this.recentProviders.length > 3) this.recentProviders.length = 3;
   }
+}
+
+export interface CouponIntegrationStatus {
+  enabled: boolean;
+  provider?: string;
+  error?: string;
 }
 
 export type JobRunResult = "published" | "no-deal" | "already-running" | "paused";

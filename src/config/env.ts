@@ -7,6 +7,11 @@ const booleanFromString = (defaultValue: boolean) =>
     .default(defaultValue ? "true" : "false")
     .transform((value) => value === "true");
 
+const optionalBooleanFromString = z
+  .enum(["true", "false"])
+  .optional()
+  .transform((value) => value === undefined ? undefined : value === "true");
+
 const optionalString = z.preprocess((value) => (value === "" ? undefined : value), z.string().optional());
 const optionalUrl = z.preprocess((value) => (value === "" ? undefined : value), z.url().optional());
 
@@ -43,7 +48,8 @@ const envSchema = z.object({
   KABUM_AWIN_FEED_URL: optionalUrl,
   KABUM_AWIN_FEED_LOCALE: z.string().regex(/^[a-z]{2}_[A-Z]{2}$/).default("pt_BR"),
   KABUM_CLICK_REF: z.string().default("telegram_canal"),
-  AWIN_COUPONS_ENABLED: booleanFromString(false),
+  // Quando omitido, a integracao e ativada automaticamente se as credenciais Awin existirem.
+  AWIN_COUPONS_ENABLED: optionalBooleanFromString,
   AWIN_PUBLISHER_ID: z.preprocess(
     (value) => (value === "" ? undefined : value),
     z.string().regex(/^\d+$/).optional(),
@@ -78,7 +84,7 @@ const envSchema = z.object({
     },
   )
   .refine(
-    (value) => !value.AWIN_COUPONS_ENABLED || Boolean(value.AWIN_PUBLISHER_ID && value.AWIN_ACCESS_TOKEN),
+    (value) => value.AWIN_COUPONS_ENABLED !== true || Boolean(value.AWIN_PUBLISHER_ID && value.AWIN_ACCESS_TOKEN),
     {
       message: "AWIN_PUBLISHER_ID e AWIN_ACCESS_TOKEN sao obrigatorios quando AWIN_COUPONS_ENABLED=true",
       path: ["AWIN_PUBLISHER_ID"],
