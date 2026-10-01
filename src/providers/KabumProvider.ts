@@ -28,6 +28,14 @@ type AwinFeedRecord = Record<string, unknown> & {
   message?: string;
 };
 
+interface KabumFeedStats {
+  records: number;
+  withRequiredFields: number;
+  blockedUnavailable: number;
+  blockedUsed: number;
+  blockedFilter: number;
+}
+
 export class KabumProvider implements AffiliateProvider {
   readonly name = "Kabum";
   private readonly client: AxiosInstance;
@@ -46,6 +54,13 @@ export class KabumProvider implements AffiliateProvider {
   async getDeals(): Promise<Deal[]> {
     try {
       const records = await this.fetchFeedRecords();
+      const stats: KabumFeedStats = {
+        records: records.length,
+        withRequiredFields: 0,
+        blockedUnavailable: 0,
+        blockedUsed: 0,
+        blockedFilter: 0,
+      };
       const deals = records.flatMap((record): Deal[] => {
         if (record.error) throw new Error(record.message ?? `Awin feed error ${record.error}`);
 
@@ -60,8 +75,19 @@ export class KabumProvider implements AffiliateProvider {
         const previousPrice = salePrice && regularPrice && salePrice < regularPrice ? regularPrice : undefined;
 
         if (!id || !title || !originalUrl || !imageUrl || !currentPrice) return [];
-        if (isUnavailable(product.availability) || isUsed(product.condition)) return [];
-        if (!isPcHardwareDeal(title)) return [];
+        stats.withRequiredFields += 1;
+        if (isUnavailable(product.availability)) {
+          stats.blockedUnavailable += 1;
+          return [];
+        }
+        if (isUsed(product.condition)) {
+          stats.blockedUsed += 1;
+          return [];
+        }
+        if (!isPcHardwareDeal(title)) {
+          stats.blockedFilter += 1;
+          return [];
+        }
 
         return [{
           id: `kabum:${id}`,
@@ -75,7 +101,16 @@ export class KabumProvider implements AffiliateProvider {
         }];
       });
 
-      return [...new Map(deals.map((deal) => [deal.id, deal])).values()];
+      const uniqueDeals = [...new Map(deals.map((deal) => [deal.id, deal])).values()];
+      console.log(
+        `Kabum/Awin (${this.feedSource}): ${stats.records} registro(s); ` +
+          `${stats.withRequiredFields} com campos minimos; ` +
+          `${stats.blockedUnavailable} indisponivel(is); ` +
+          `${stats.blockedUsed} usado(s)/recondicionado(s); ` +
+          `${stats.blockedFilter} bloqueado(s) pelo filtro; ` +
+          `${uniqueDeals.length} aprovado(s).`,
+      );
+      return uniqueDeals;
     } catch (error) {
       const message = axios.isAxiosError(error)
         ? `${error.response?.status ?? error.code ?? "HTTP_ERROR"}: ${error.message}`
