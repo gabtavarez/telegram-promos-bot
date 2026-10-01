@@ -36,6 +36,7 @@ export function formatCaption(deal: Deal, affiliateUrl: string): string {
   const discountHighlight = getDiscountHighlight(deal.discountPercentage);
   const category = getCategoryHashtag(deal.title);
   const coupon = deal.couponCode ? ["", `🎟️ CUPOM: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
+  const visibleUrl = deal.displayUrl ?? affiliateUrl;
 
   return [
     `🔥 <b>${escapeHtml(deal.title)}</b>`,
@@ -44,7 +45,7 @@ export function formatCaption(deal: Deal, affiliateUrl: string): string {
     ...coupon,
     "",
     "✅ VER OFERTA",
-    escapeHtml(affiliateUrl),
+    escapeHtml(visibleUrl),
     "",
     `📢 #Anuncio ${category}`,
     "⚠️ Preços e disponibilidade podem mudar a qualquer momento.",

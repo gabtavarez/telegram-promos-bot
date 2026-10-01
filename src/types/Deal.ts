@@ -5,6 +5,7 @@ export interface Deal {
   provider: ProviderName;
   title: string;
   originalUrl: string;
+  displayUrl?: string;
   imageUrl: string;
   currentPrice: number;
   previousPrice?: number;

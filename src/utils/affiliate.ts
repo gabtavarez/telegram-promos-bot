@@ -29,6 +29,9 @@ export function addAwinAffiliateTag(
   productUrl: string,
   options: { advertiserId: string; publisherId: string; clickRef?: string },
 ): string {
+  const originalUrl = safeUrl(productUrl);
+  if (originalUrl.hostname.endsWith("awin1.com")) return originalUrl.toString();
+
   const url = new URL("https://www.awin1.com/cread.php");
   url.searchParams.set("awinmid", options.advertiserId);
   url.searchParams.set("awinaffid", options.publisherId);

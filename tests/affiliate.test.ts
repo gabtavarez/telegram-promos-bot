@@ -31,4 +31,20 @@ describe("affiliate links", () => {
     expect(url.searchParams.get("clickref")).toBe("Telegram");
     expect(url.searchParams.get("ued")).toBe("https://www.kabum.com.br/produto/123/placa-de-video");
   });
+
+  it("keeps existing Awin links unchanged", () => {
+    const awinUrl = "https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&ued=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F123";
+    const result = addAwinAffiliateTag(awinUrl, {
+      advertiserId: "17729",
+      publisherId: "3108044",
+      clickRef: "Telegram",
+    });
+
+    const url = new URL(result);
+    expect(url.origin).toBe("https://www.awin1.com");
+    expect(url.searchParams.get("awinmid")).toBe("17729");
+    expect(url.searchParams.get("awinaffid")).toBe("3108044");
+    expect(url.searchParams.get("clickref")).toBeNull();
+    expect(url.searchParams.get("ued")).toBe("https://www.kabum.com.br/produto/123");
+  });
 });

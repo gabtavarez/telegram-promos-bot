@@ -98,6 +98,7 @@ export class KabumProvider implements AffiliateProvider {
           provider: "kabum",
           title,
           originalUrl,
+          displayUrl: getDisplayUrl(product.link),
           imageUrl,
           currentPrice,
           previousPrice,
@@ -295,6 +296,22 @@ function normalizeUrl(value?: string): string | undefined {
   try {
     const url = new URL(value);
     return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getDisplayUrl(value?: string): string | undefined {
+  const url = normalizeUrl(value);
+  if (!url) return undefined;
+
+  try {
+    const parsed = new URL(url);
+    const destination = parsed.searchParams.get("ued") ?? parsed.searchParams.get("p");
+    const cleanUrl = destination ? new URL(destination) : parsed;
+    cleanUrl.search = "";
+    cleanUrl.hash = "";
+    return cleanUrl.toString();
   } catch {
     return undefined;
   }

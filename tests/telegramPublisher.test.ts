@@ -45,4 +45,14 @@ describe("formatCaption", () => {
 
     expect(formatCaption(television, television.originalUrl)).toContain("#TV");
   });
+
+  it("mostra o link limpo quando a oferta tem displayUrl", () => {
+    const caption = formatCaption(
+      { ...baseDeal, displayUrl: "https://www.kabum.com.br/produto/123/ssd" },
+      "https://www.awin1.com/cread.php?awinmid=17729&awinaffid=3108044&ued=https%3A%2F%2Fwww.kabum.com.br%2Fproduto%2F123%2Fssd",
+    );
+
+    expect(caption).toContain("https://www.kabum.com.br/produto/123/ssd");
+    expect(caption).not.toContain("https://www.awin1.com/cread.php");
+  });
 });
