@@ -145,7 +145,7 @@ export function getDiscountHighlight(discountPercentage?: number): string {
 export function getCategoryHashtag(title: string): string {
   const normalized = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const categories: Array<[RegExp, string]> = [
-    [/\b(?:smartphone|celular|iphone|galaxy\s+[samz]\d)/, "#Celular"],
+    [/\b(?:smartphone|celular|apple\s+iphone|samsung\s+galaxy\s+[samz]\d)/, "#Celular"],
     [/\b(notebook|laptop|ultrabook|macbook)\b/, "#Notebook"],
     [/\b(tablet|ipad|tab\s?\d{1,2}|tab\s?[a-z]\d{1,2})\b/, "#Tablet"],
     [/\b(smart\s*(?:tv|v)|tv|televisao|televisor|qled|oled)\b/, "#TV"],

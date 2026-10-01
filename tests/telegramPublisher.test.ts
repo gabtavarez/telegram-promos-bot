@@ -80,6 +80,15 @@ describe("formatCaption", () => {
     expect(caption).toContain("#Celular");
   });
 
+  it("nao classifica acessorio para iPhone como celular", () => {
+    const caption = formatCaption({
+      ...baseDeal,
+      title: "Hagibis 2230 M.2 NVMe SSD Gabinete USB 3.2 Gen 2 para iPhone 17 Pro Laptops",
+    }, baseDeal.originalUrl);
+
+    expect(caption).not.toContain("#Celular");
+  });
+
   it("mantem apenas o botao principal da oferta", () => {
     const keyboard = buildOfferKeyboard(baseDeal.originalUrl);
     expect(JSON.stringify(keyboard)).toContain("VER OFERTA");
