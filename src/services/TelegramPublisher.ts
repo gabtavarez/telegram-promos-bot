@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot, InlineKeyboard, InputFile } from "grammy";
 import type { Deal } from "../types/Deal.js";
 import type {
   PublishedMessageType,
   PublishedOffer,
   PublishedOfferStatus,
 } from "../types/BotState.js";
+import { createWatermarkedImage } from "./ImageWatermark.js";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -21,7 +22,8 @@ export class TelegramPublisher {
     const caption = formatCaption(deal, affiliateUrl);
     const keyboard = buildOfferKeyboard(affiliateUrl);
     try {
-      const message = await this.bot.api.sendPhoto(this.channelId, deal.imageUrl, {
+      const photo = await getPhotoForTelegram(deal.imageUrl);
+      const message = await this.bot.api.sendPhoto(this.channelId, photo, {
         caption,
         parse_mode: "HTML",
         reply_markup: keyboard,
@@ -67,7 +69,8 @@ export class TelegramPublisher {
     const caption = [`🔔 <b>ALERTA ENCONTRADO</b>`, "", formatCaption(deal, affiliateUrl)].join("\n");
     const keyboard = new InlineKeyboard().url("✅ VER OFERTA", affiliateUrl);
     try {
-      await this.bot.api.sendPhoto(userId, deal.imageUrl, { caption, parse_mode: "HTML", reply_markup: keyboard });
+      const photo = await getPhotoForTelegram(deal.imageUrl);
+      await this.bot.api.sendPhoto(userId, photo, { caption, parse_mode: "HTML", reply_markup: keyboard });
     } catch {
       await this.bot.api.sendMessage(userId, caption, {
         parse_mode: "HTML",
@@ -89,6 +92,16 @@ export class TelegramPublisher {
       ...lines.flatMap((line) => [line, ""]),
       "📌 Seleção automática pelas notas de qualidade, preço e desconto.",
     ].join("\n"), { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+  }
+}
+
+export async function getPhotoForTelegram(imageUrl: string): Promise<string | InputFile> {
+  try {
+    const watermarked = await createWatermarkedImage(imageUrl);
+    return watermarked ? new InputFile(watermarked, "oferta-tavarez.jpg") : imageUrl;
+  } catch (error) {
+    console.warn("Nao foi possivel aplicar a marca d'agua; usando imagem original.", error);
+    return imageUrl;
   }
 }
 
