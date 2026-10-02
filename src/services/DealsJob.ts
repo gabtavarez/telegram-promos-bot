@@ -377,6 +377,7 @@ export function isPromotableDeal(deal: Deal): boolean {
 
   if (deal.couponCode) return true;
   if ((deal.discountPercentage ?? 0) >= 15) return true;
+  if (deal.provider === "kabum" && qualityScore >= 7) return true;
 
   if ((deal.priceHistory?.observationDays ?? 0) >= 3) {
     return (deal.priceHistory?.percentBelow30DayAverage ?? 0) >= 10;
@@ -411,9 +412,38 @@ export function getDealSelectionScore(deal: Deal, recentProviders: ProviderName[
   const discount = Math.min(deal.discountPercentage ?? 0, 60);
   const historyBonus = Math.max(0, Math.min(deal.priceHistory?.percentBelow30DayAverage ?? 0, 20));
   const couponBonus = deal.couponCode ? 8 : 0;
+  const providerBonus = deal.provider === "kabum" ? 14 : 0;
+  const categoryBonus = getCategorySelectionBonus(deal.title);
   const mostRecentPenalty = recentProviders[0] === deal.provider ? 20 : 0;
   const recentPenalty = !mostRecentPenalty && recentProviders.slice(1).includes(deal.provider) ? 8 : 0;
-  return (deal.tavarezScore ?? quality * 5) + discount + historyBonus + couponBonus - mostRecentPenalty - recentPenalty;
+  return (deal.tavarezScore ?? quality * 5) +
+    discount +
+    historyBonus +
+    couponBonus +
+    providerBonus +
+    categoryBonus -
+    mostRecentPenalty -
+    recentPenalty;
+}
+
+function getCategorySelectionBonus(title: string): number {
+  const normalized = normalizeSearch(title);
+  if (/\b(?:rtx|gtx|radeon|geforce|rx\s?\d{3,4}|placa de video)\b/.test(normalized)) return 24;
+  if (/\b(?:processador|ryzen|intel core|core i[3579])\b/.test(normalized)) return 22;
+  if (/\b(?:monitor|ultrawide|144hz|165hz|180hz|240hz)\b/.test(normalized)) return 20;
+  if (/\b(?:ssd|nvme|m\.2)\b/.test(normalized)) return 18;
+  if (/\b(?:memoria ram|ddr4|ddr5)\b/.test(normalized)) return 16;
+  if (/\b(?:fonte|80 plus|psu)\b/.test(normalized)) return 15;
+  if (/\b(?:gabinete|mid tower|mini itx|aquario)\b/.test(normalized)) return 12;
+  if (/\b(?:water cooler|aio|liquid cooler)\b/.test(normalized)) {
+    return /\b(?:lcd|display|tela|screen)\b/.test(normalized) ? 18 : 8;
+  }
+  if (/\b(?:air cooler|cpu cooler|refrigerador cpu)\b/.test(normalized)) return -14;
+  if (/\b(?:teclado|mouse|headset|fone gamer)\b/.test(normalized)) return 10;
+  if (/\b(?:notebook|laptop)\b/.test(normalized)) return 10;
+  if (/\b(?:smartphone|celular|iphone|galaxy)\b/.test(normalized)) return 8;
+  if (/\b(?:smart tv|televisor|tv)\b/.test(normalized)) return 7;
+  return 0;
 }
 
 function normalizeSearch(value: string): string {

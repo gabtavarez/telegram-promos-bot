@@ -59,6 +59,7 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Samsung Galaxy A06 128GB 4GB RAM")).toBe(false);
     expect(isPcHardwareDeal("Apple iPhone 11 64GB")).toBe(false);
     expect(isPcHardwareDeal("Capa para iPhone 16 Pro Max")).toBe(false);
+    expect(isPcHardwareDeal("Capa Para Ins Amor Silicone Macio TPU Samsung Galaxy A55 A54 A53 A52s A52 A35 A34 A16 A15 A14 5G 4G A06 A05 Telefone")).toBe(false);
     expect(isPcHardwareDeal("Hagibis 2230 M.2 NVMe SSD Gabinete USB 3.2 Gen 2 para PCI-E M.2 SSD Case 2242 SSD externo Disquete para iPhone 17 Pro Laptops")).toBe(false);
     expect(isPcHardwareDeal("Case externo para SSD M.2 NVMe USB-C 10Gbps")).toBe(false);
   });

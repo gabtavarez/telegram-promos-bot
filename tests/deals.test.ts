@@ -57,6 +57,33 @@ describe("deal selection", () => {
     })).toBe(false);
   });
 
+  it("permite bons produtos da Kabum mesmo sem percentual de desconto no feed", () => {
+    expect(isPromotableDeal({
+      ...base,
+      provider: "kabum",
+      title: "Fonte ATX MSI MAG A650BN 650W 80 Plus Bronze",
+      discountPercentage: undefined,
+    })).toBe(true);
+  });
+
+  it("prioriza water cooler com tela sobre air cooler comum", () => {
+    const waterCooler = {
+      ...base,
+      id: "water",
+      title: "Water Cooler Rise Mode 240mm LCD Display Tela ARGB",
+      discountPercentage: 25,
+    };
+    const airCooler = {
+      ...base,
+      id: "air",
+      title: "Deepcool AG400 Air Cooler CPU ARGB 220W",
+      discountPercentage: 25,
+    };
+
+    expect(getDealSelectionScore(waterCooler)).toBeGreaterThan(getDealSelectionScore(airCooler));
+    expect(selectBestDeal([airCooler, waterCooler])?.id).toBe("water");
+  });
+
   it("aceita preco historicamente bom mesmo quando o desconto informado e pequeno", () => {
     expect(isPromotableDeal({
       ...base,
