@@ -14,6 +14,9 @@ import type { DealsStore } from "./storage/DealsStore.js";
 import { PostedDealsStore } from "./storage/PostedDealsStore.js";
 import { UpstashPostedDealsStore } from "./storage/UpstashPostedDealsStore.js";
 import { AwinCouponProvider } from "./coupons/AwinCouponProvider.js";
+import { CompositeCouponProvider } from "./coupons/CompositeCouponProvider.js";
+import { MercadoLivreCouponProvider } from "./coupons/MercadoLivreCouponProvider.js";
+import type { CouponProvider } from "./coupons/CouponProvider.js";
 
 async function main(): Promise<void> {
   const store: DealsStore = env.UPSTASH_REDIS_REST_URL
@@ -55,18 +58,19 @@ async function main(): Promise<void> {
   }
 
   const couponsEnabled = env.AWIN_COUPONS_ENABLED ?? Boolean(env.AWIN_PUBLISHER_ID && env.AWIN_ACCESS_TOKEN);
-  const couponProvider = couponsEnabled
-    ? new AwinCouponProvider({
+  const couponProviders: CouponProvider[] = [new MercadoLivreCouponProvider()];
+  if (couponsEnabled) {
+    couponProviders.push(new AwinCouponProvider({
         publisherId: env.AWIN_PUBLISHER_ID!,
         accessToken: env.AWIN_ACCESS_TOKEN!,
         advertiserIds: parseAdvertiserIds(env.AWIN_ADVERTISER_IDS),
-      })
-    : undefined;
-  if (couponProvider) {
+      }));
     console.log("Cupons Awin ativos.");
   } else {
     console.log("Cupons Awin desativados: informe AWIN_ACCESS_TOKEN ou defina AWIN_COUPONS_ENABLED=true.");
   }
+  const couponProvider = new CompositeCouponProvider(couponProviders);
+  console.log("Busca automatica de cupons do Mercado Livre ativa.");
 
   const job = new DealsJob(
     providers,

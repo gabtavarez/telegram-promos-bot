@@ -9,11 +9,23 @@ export function findCouponForDeal(deal: Deal, coupons: Coupon[]): Coupon | undef
 
   return coupons
     .filter((coupon) => {
+      if (coupon.minimumPurchase !== undefined && deal.currentPrice < coupon.minimumPurchase) return false;
+      if (coupon.eligibleItemIds?.length && !coupon.eligibleItemIds.some((id) => deal.id.includes(id))) return false;
       const couponUrl = safeUrl(coupon.destinationUrl);
       if (!couponUrl || !sameMerchant(dealUrl.hostname, couponUrl.hostname)) return false;
       return isStoreWide(couponUrl.pathname) || pathsMatch(dealUrl.pathname, couponUrl.pathname);
     })
-    .sort((a, b) => Number(b.exclusive) - Number(a.exclusive) || b.endsAt.getTime() - a.endsAt.getTime())[0];
+    .sort((a, b) =>
+      couponConfidence(b) - couponConfidence(a) ||
+      Number(b.exclusive) - Number(a.exclusive) ||
+      b.endsAt.getTime() - a.endsAt.getTime(),
+    )[0];
+}
+
+function couponConfidence(coupon: Coupon): number {
+  // Se uma lista oficial confirmou exatamente o item, ela deve vencer um
+  // codigo generico mesmo que este tenha aparecido em mais fontes.
+  return (coupon.eligibleItemIds?.length ? 100 : 0) + (coupon.confidence ?? 0);
 }
 
 function safeUrl(value: string): URL | undefined {

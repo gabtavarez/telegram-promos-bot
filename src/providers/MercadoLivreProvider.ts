@@ -44,9 +44,12 @@ export class MercadoLivreProvider implements AffiliateProvider {
       if (!isPcHardwareDeal(title)) return;
 
       const originalUrl = new URL(href, "https://www.mercadolivre.com.br");
-      const itemId = originalUrl.pathname.match(/(MLB-?\d+)/i)?.[1]?.replace("-", "") ?? originalUrl.pathname;
+      const fragment = new URLSearchParams(originalUrl.hash.replace(/^#/, ""));
+      const itemId = fragment.get("wid")?.replace("-", "") ??
+        originalUrl.pathname.match(/(MLB-?\d+)/i)?.[1]?.replace("-", "") ?? originalUrl.pathname;
       const couponCode = extractVisibleCouponCode(card.text());
       originalUrl.search = "";
+      originalUrl.hash = "";
       deals.push({
         id: `mercado-livre:${itemId}`,
         provider: "mercado-livre",

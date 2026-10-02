@@ -107,6 +107,24 @@ describe("provider delivery checks", () => {
     });
   });
 
+  it("usa o id real do anuncio Mercado Livre quando o card contem wid", async () => {
+    httpMocks.get.mockResolvedValue({
+      data: `
+        <div class="promotion-item">
+          <a href="https://www.mercadolivre.com.br/monitor-lg/p/MLB79391475?tracking=x#position=3&wid=MLB7685286148&sid=offers"></a>
+          <p class="promotion-item__title">Monitor Gamer LG UltraGear 27 144Hz IPS</p>
+          <img src="https://example.com/monitor.jpg" />
+          <span class="andes-money-amount"><span class="andes-money-amount__fraction">678</span></span>
+        </div>
+      `,
+    });
+
+    const deals = await new MercadoLivreProvider("https://ml.example/ofertas").getDeals();
+
+    expect(deals[0]?.id).toBe("mercado-livre:MLB7685286148");
+    expect(deals[0]?.originalUrl).toBe("https://www.mercadolivre.com.br/monitor-lg/p/MLB79391475");
+  });
+
   it("extracts only quality Kabum deals", async () => {
     axiosMocks.get.mockResolvedValue({
       data: [

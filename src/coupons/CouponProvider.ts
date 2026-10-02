@@ -8,6 +8,9 @@ export interface Coupon {
   startsAt: Date;
   endsAt: Date;
   exclusive: boolean;
+  minimumPurchase?: number;
+  eligibleItemIds?: string[];
+  confidence?: number;
 }
 
 export interface CouponProvider {

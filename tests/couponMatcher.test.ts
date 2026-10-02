@@ -41,4 +41,17 @@ describe("coupon matcher", () => {
 
     expect(findCouponForDeal(trackedDeal, [coupon])?.code).toBe(coupon.code);
   });
+
+  it("respeita o valor minimo de compra do cupom", () => {
+    expect(findCouponForDeal(deal, [{ ...coupon, minimumPurchase: 301 }])).toBeUndefined();
+    expect(findCouponForDeal(deal, [{ ...coupon, minimumPurchase: 300 }])?.code).toBe(coupon.code);
+  });
+
+  it("prefere o cupom confirmado por mais fontes", () => {
+    const selected = findCouponForDeal(deal, [
+      { ...coupon, code: "UMAFONTE", confidence: 1 },
+      { ...coupon, code: "CONFIRMADO", confidence: 3 },
+    ]);
+    expect(selected?.code).toBe("CONFIRMADO");
+  });
 });
