@@ -1,6 +1,6 @@
 import { Bot, InlineKeyboard } from "grammy";
 import type { DealsJob, JobRunResult } from "./DealsJob.js";
-import { formatCaption, getPhotoForTelegram } from "./TelegramPublisher.js";
+import { formatCaption } from "./TelegramPublisher.js";
 
 export class TelegramAdminBot {
   private readonly bot: Bot;
@@ -152,8 +152,7 @@ export class TelegramAdminBot {
         const caption = formatCaption(deal, affiliateUrl);
         const keyboard = new InlineKeyboard().url("✅ VER OFERTA", affiliateUrl);
         try {
-          const photo = await getPhotoForTelegram(deal.imageUrl);
-          await context.api.sendPhoto(context.chat.id, photo, {
+          await context.api.sendPhoto(context.chat.id, deal.imageUrl, {
             caption,
             parse_mode: "HTML",
             reply_markup: keyboard,
