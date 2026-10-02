@@ -36,6 +36,7 @@ const HARDWARE_TERMS = [
 
 const BLOCKED_TERMS = [
   /\bmancer\b/i,
+  /\bmetalfish\b/i,
   /\b(?:pc|computador|desktop)\s+(?:gamer|completo|montado|pronto)\b/i,
   /\b(?:pc|computador|desktop)\s+(?:amd|intel|ryzen|core\s+i[3579])\b/i,
   /\bkit\s+(?:pc|computador)\s+(?:gamer|completo|montado)\b/i,
@@ -49,7 +50,11 @@ const BLOCKED_TERMS = [
   /\b(carregador|adaptador\s+so-?dimm|adaptador|fonte\s+usb|fonte\s+alimentacao\s+usb|fonte\s+alimenta[cç][aã]o\s+usb)\b/i,
   /\b(?:ssd|m\.2|nvme)\s+(?:enclosure|case|caddy|adaptador|adapter|gaveta|case\s+externo|disquete)\b/i,
   /\b(?:enclosure|case|caddy|adaptador|adapter|gaveta|case\s+externo|disquete)\s+(?:para\s+)?(?:ssd|m\.2|nvme)\b/i,
+  /\b(?:dissipador|heatsink|heat\s*sink|cooler|radiador)\s+(?:ssd|m\.2|nvme)\b/i,
+  /\b(?:ssd|m\.2|nvme).*\b(?:dissipador|heatsink|heat\s*sink|argb\s+sync)\b/i,
   /\b(?:ssd|m\.2|nvme).*\b(?:iphone|ipad|celular|smartphone|laptop)\b/i,
+  /^(?=.*\b(?:secondary\s+display|tela\s+secund[aá]ria|usb\s+secondary\s+display|watercooler\s+screen|water\s*cooler\s+screen)\b)(?!.*\b(?:water\s*cooler|aio|240mm|360mm|radiador|bomba|fans?)\b).*$/i,
+  /^(?=.*\b(?:ips|lcd|display|tela|screen)\b)(?=.*\b(?:watercooler\s+screen|refrigerador\s+de\s+[aá]gua|usb\s+tipo-?c|usb\s+type-?c)\b).*$/i,
   /\b(raspberry\s*pi|raspberry|rp2040|arduino|esp32|esp8266|microcontrolador(?:es)?|pico\s+w|pico\s+rp2040)\b/i,
   /\b(tv\s*box|controle\s+remoto\s+(?:para\s+)?tv|painel\s+para\s+tv|rack\s+para\s+tv)\b/i,
   /^(?=.*\bsuporte\b)(?=.*\btv\b).*$/i,

@@ -62,6 +62,9 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Capa Para Ins Amor Silicone Macio TPU Samsung Galaxy A55 A54 A53 A52s A52 A35 A34 A16 A15 A14 5G 4G A06 A05 Telefone")).toBe(false);
     expect(isPcHardwareDeal("Hagibis 2230 M.2 NVMe SSD Gabinete USB 3.2 Gen 2 para PCI-E M.2 SSD Case 2242 SSD externo Disquete para iPhone 17 Pro Laptops")).toBe(false);
     expect(isPcHardwareDeal("Case externo para SSD M.2 NVMe USB-C 10Gbps")).toBe(false);
+    expect(isPcHardwareDeal("Turzx 2.1 Polegada ips tela secundaria usb tipo-c 480x480 display redondo para refrigerador de agua pc cpu gpu ram hdd monitor com caso cnc")).toBe(false);
+    expect(isPcHardwareDeal("METALFISH Flex 500/600W 80PLUS GOLD Fonte de alimentacao modular completa Flex-ATX 1U PSU para ITX Mini PC POS NAS GPU Dock")).toBe(false);
+    expect(isPcHardwareDeal("Dissipador SSD M.2 2280 NVMe Delta-CN510 ARGB 5V 3 Pinos Aura Sync")).toBe(false);
   });
 
   it("scores curated products above weak products", () => {

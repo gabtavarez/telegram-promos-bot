@@ -144,6 +144,12 @@ export function getDiscountHighlight(discountPercentage?: number): string {
 
 export function getCategoryHashtag(title: string): string {
   const normalized = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/\b(?:secondary display|tela secundaria|watercooler screen|water cooler screen)\b/.test(normalized)) {
+    return "#Setup";
+  }
+  if (/\b(?:dissipador|heatsink|heat sink)\s+(?:ssd|m\.2|nvme)\b/.test(normalized)) {
+    return "#Setup";
+  }
   const categories: Array<[RegExp, string]> = [
     [/\b(?:smartphone|celular|apple\s+iphone|samsung\s+galaxy\s+[samz]\d)/, "#Celular"],
     [/\b(notebook|laptop|ultrabook|macbook)\b/, "#Notebook"],

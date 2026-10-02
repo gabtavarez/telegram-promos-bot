@@ -89,6 +89,16 @@ describe("formatCaption", () => {
     expect(caption).not.toContain("#Celular");
   });
 
+  it("nao classifica display avulso como GPU", () => {
+    const caption = formatCaption({
+      ...baseDeal,
+      title: "Turzx 2.1 Polegada IPS Tela Secundaria USB Tipo-C Display Redondo para CPU GPU RAM HDD",
+    }, baseDeal.originalUrl);
+
+    expect(caption).toContain("#Setup");
+    expect(caption).not.toContain("#GPU");
+  });
+
   it("mantem apenas o botao principal da oferta", () => {
     const keyboard = buildOfferKeyboard(baseDeal.originalUrl);
     expect(JSON.stringify(keyboard)).toContain("VER OFERTA");
