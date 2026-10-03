@@ -10,7 +10,11 @@ import { findCouponForDeal } from "../coupons/CouponMatcher.js";
 import type { Coupon } from "../coupons/CouponProvider.js";
 import type { FeedbackCounts, FeedbackType, PublishedOffer, UserAlert } from "../types/BotState.js";
 import { checkDealAvailability, isDealAvailable } from "./DealAvailabilityChecker.js";
-import { enrichDealMetrics } from "./DealScoring.js";
+import {
+  getVerifiedDiscountPercentage,
+  hasReliablePriceEvidence,
+  withPriceHistory,
+} from "./DealPriceConfidence.js";
 
 export class DealsJob {
   private running = false;
@@ -21,7 +25,7 @@ export class DealsJob {
   private readonly recentProviders: ProviderName[] = [];
   private readonly recentCategories: string[] = [];
   private cycleCount = 0;
-  private legacyButtonsCleaned = false;
+  private legacyMessagesUpdated = false;
 
   constructor(
     private readonly providers: AffiliateProvider[],
@@ -43,23 +47,23 @@ export class DealsJob {
 
     this.running = true;
     try {
-      if (!this.legacyButtonsCleaned) {
+      if (!this.legacyMessagesUpdated) {
         try {
-          await this.cleanupLegacyCommunityButtons();
-          this.legacyButtonsCleaned = true;
+          await this.updateLegacyMessages();
+          this.legacyMessagesUpdated = true;
         } catch (error) {
-          console.warn("Nao foi possivel remover botoes comunitarios antigos neste ciclo.", error);
+          console.warn("Nao foi possivel atualizar publicacoes antigas neste ciclo.", error);
         }
       }
       const discovered = await this.attachCoupons(await this.collectDeals());
       const qualityCandidates = discovered.filter(isQualityCandidate);
       const history = await this.recordPriceHistorySafely(qualityCandidates);
-      const enriched = qualityCandidates.map((deal) => enrichDealMetrics(deal, history.get(deal.id)));
+      const enriched = qualityCandidates.map((deal) => withPriceHistory(deal, history.get(deal.id)));
       const qualifiedDeals = enriched.filter(isPromotableDeal);
       const available = await this.store.filterUnposted(qualifiedDeals);
       console.log(
         `Filtro final: ${qualityCandidates.length} produto(s) de qualidade; ` +
-          `${qualifiedDeals.length} promo(s) media(s)/boa(s); ` +
+          `${qualifiedDeals.length} oferta(s) com preco validado; ` +
           `${available.length} nova(s) apos o historico de 12h.`,
       );
       logProviderAvailability(qualifiedDeals, available);
@@ -74,7 +78,7 @@ export class DealsJob {
         return "no-deal";
       }
 
-      const dealWithCoupon = enrichDealMetrics(await this.attachCoupon(best), best.priceHistory);
+      const dealWithCoupon = withPriceHistory(await this.attachCoupon(best), best.priceHistory);
       const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
       if (!(await this.store.markPosted(best.id, best.originalUrl))) {
         console.log("Oferta escolhida ja foi reservada por outra instancia.");
@@ -150,7 +154,7 @@ export class DealsJob {
     const qualityCandidates = collected.filter(isQualityCandidate);
     const history = await this.recordPriceHistorySafely(qualityCandidates);
     const candidates = qualityCandidates
-      .map((deal) => enrichDealMetrics(deal, history.get(deal.id)))
+      .map((deal) => withPriceHistory(deal, history.get(deal.id)))
       .filter((deal) => matchesDealSearch(deal, query))
       .filter(isPromotableDeal)
       .sort(compareDeals);
@@ -173,7 +177,7 @@ export class DealsJob {
   async testSend(): Promise<void> {
     const deals = (await this.attachCoupons(await this.collectDeals())).filter(isQualityCandidate);
     const history = await this.recordPriceHistorySafely(deals);
-    const enriched = deals.map((deal) => enrichDealMetrics(deal, history.get(deal.id)));
+    const enriched = deals.map((deal) => withPriceHistory(deal, history.get(deal.id)));
     const best = await selectFirstAvailableDeal(
       enriched.filter(isPromotableDeal),
       this.recentProviders,
@@ -184,7 +188,7 @@ export class DealsJob {
       return;
     }
 
-    const dealWithCoupon = enrichDealMetrics(await this.attachCoupon(best), best.priceHistory);
+    const dealWithCoupon = withPriceHistory(await this.attachCoupon(best), best.priceHistory);
     const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
     await this.publisher.publish(dealWithCoupon, affiliateUrl);
     console.log(`Oferta de teste publicada: ${best.title}`);
@@ -217,7 +221,7 @@ export class DealsJob {
     const cutoff = now.getTime() - 24 * 60 * 60 * 1_000;
     const offers = (await this.store.getPublishedOffers())
       .filter((offer) => offer.status !== "soldout" && Date.parse(offer.publishedAt) >= cutoff)
-      .sort((a, b) => (b.deal.tavarezScore ?? 0) - (a.deal.tavarezScore ?? 0))
+      .sort((a, b) => compareDeals(a.deal, b.deal))
       .slice(0, 5);
     if (offers.length === 0) return false;
 
@@ -321,7 +325,7 @@ export class DealsJob {
         let updated = offer;
         const current = currentById.get(offer.deal.id);
         const refreshedDeal = current
-          ? enrichDealMetrics(await this.attachCoupon({
+          ? withPriceHistory(await this.attachCoupon({
               ...current,
               couponCode: undefined,
               couponEndsAt: undefined,
@@ -342,7 +346,7 @@ export class DealsJob {
         } else if (!current && offer.deal.couponEndsAt && Date.parse(offer.deal.couponEndsAt) <= Date.now()) {
           updated = {
             ...updated,
-            deal: enrichDealMetrics({
+            deal: withPriceHistory({
               ...offer.deal,
               couponCode: undefined,
               couponEndsAt: undefined,
@@ -371,14 +375,16 @@ export class DealsJob {
     await this.store.updatePublishedOffer(updated);
   }
 
-  private async cleanupLegacyCommunityButtons(): Promise<void> {
+  private async updateLegacyMessages(): Promise<void> {
     const offers = (await this.store.getPublishedOffers(20)).slice(0, 20);
     for (let index = 0; index < offers.length; index += 4) {
       await Promise.all(offers.slice(index, index + 4).map((offer) =>
-        this.publisher.removeCommunityButtons(offer).catch(() => undefined),
+        this.publisher.editPublishedOffer(offer).catch(() => undefined),
       ));
     }
-    if (offers.length > 0) console.log(`Botoes comunitarios removidos de ${offers.length} publicacao(oes) recente(s).`);
+    if (offers.length > 0) {
+      console.log(`${offers.length} publicacao(oes) recente(s) atualizada(s) para o novo formato.`);
+    }
   }
 
   private rememberProvider(provider: ProviderName): void {
@@ -437,15 +443,7 @@ async function selectFirstAvailableDeal(
 export function isPromotableDeal(deal: Deal): boolean {
   const qualityScore = getHardwareQualityScore(deal.title);
   if (qualityScore < 6) return false;
-
-  if (deal.couponCode && deal.couponVerified && qualityScore >= 6) return true;
-  if ((deal.discountPercentage ?? 0) >= 15) return true;
-
-  if ((deal.priceHistory?.observationDays ?? 0) >= 3) {
-    return (deal.priceHistory?.percentBelow30DayAverage ?? 0) >= 10;
-  }
-
-  return false;
+  return hasReliablePriceEvidence(deal);
 }
 
 export function isQualityCandidate(deal: Deal): boolean {
@@ -477,8 +475,8 @@ export function getDealSelectionScore(
   recentCategories: string[] = [],
 ): number {
   const quality = Math.max(0, getHardwareQualityScore(deal.title));
-  const discount = Math.min(deal.discountPercentage ?? 0, 60);
-  const historyBonus = Math.max(0, Math.min(deal.priceHistory?.percentBelow30DayAverage ?? 0, 20));
+  const verifiedDiscount = getVerifiedDiscountPercentage(deal) ?? 0;
+  const historyBonus = Math.min(verifiedDiscount * 2, 40);
   const couponBonus = deal.couponCode && deal.couponVerified ? 8 : 0;
   const providerBonus = deal.provider === "kabum" ? 14 : 0;
   const categoryBonus = getCategorySelectionBonus(deal.title);
@@ -487,8 +485,7 @@ export function getDealSelectionScore(
   const category = getDealCategory(deal.title);
   const mostRecentCategoryPenalty = recentCategories[0] === category ? 24 : 0;
   const recentCategoryPenalty = !mostRecentCategoryPenalty && recentCategories.slice(1).includes(category) ? 10 : 0;
-  return (deal.tavarezScore ?? quality * 5) +
-    discount +
+  return quality * 5 +
     historyBonus +
     couponBonus +
     providerBonus +
