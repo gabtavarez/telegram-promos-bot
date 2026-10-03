@@ -35,4 +35,9 @@ describe("price history", () => {
     expect(stats?.percentBelow30DayAverage).toBe(14);
     expect(stats?.isLowestPrice90Days).toBe(true);
   });
+
+  it("mantem o dia de Sao Paulo perto da virada em UTC", () => {
+    expect(getPriceHistoryDateKeys(new Date("2026-10-03T00:30:00Z"), 2))
+      .toEqual(["2026-10-02", "2026-10-01"]);
+  });
 });

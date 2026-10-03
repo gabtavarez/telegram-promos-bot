@@ -17,7 +17,7 @@ Preencha no `.env`:
 - `TELEGRAM_BOT_TOKEN`: token criado pelo BotFather.
 - `CHANNEL_ID`: `@nome_do_canal` ou o ID numérico do canal. O bot precisa ser administrador com permissão para publicar.
 - `TELEGRAM_ADMIN_USER_ID`: ID numérico do único usuário autorizado a usar os comandos administrativos.
-- `AMAZON_TAG`: ID do programa de associados da Amazon.
+- `AMAZON_TAG`: ID do programa de associados da Amazon; obrigatório somente com `AMAZON_ENABLED=true`.
 - `ML_TAG`: parâmetros de rastreio do Mercado Livre em formato de query string, como `matt_tool=123&matt_word=hardware`.
 - `CRON_SCHEDULE`: frequência de busca das ofertas. Use `*/5 * * * *` para verificar a cada cinco minutos.
 
@@ -44,11 +44,11 @@ npm start         # executa o build
 
 1. Envie o repositório para um provedor Git.
 2. No Render, crie um **Background Worker** com runtime Docker e plano Free, caso ele esteja disponível na sua conta/região. Para um Web Service, configure `PORT=10000` e use `/health` como health check.
-3. Cadastre as quatro variáveis obrigatórias no painel do Render. Nunca envie o arquivo `.env` ao repositório.
+3. Cadastre `TELEGRAM_BOT_TOKEN`, `CHANNEL_ID` e `ML_TAG` no painel do Render, além das credenciais das lojas ativadas. Nunca envie o arquivo `.env` ao repositório.
 4. Crie um banco Redis gratuito no Upstash e copie `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN` para as variáveis do Render.
 5. Use o `Dockerfile` da raiz. O comando de inicialização já está definido na imagem.
 
-O limite de heap do Node foi fixado em 384 MB, deixando margem dentro dos 512 MB para o runtime e bibliotecas. A coleta é sequencial e cada resposta HTML é limitada a 6 MB.
+O limite de heap do Node foi fixado em 384 MB, deixando margem dentro dos 512 MB para o runtime e bibliotecas. Os provedores são consultados sequencialmente; as buscas internas da Shopee usam concorrência limitada e cada resposta HTML é limitada a 6 MB.
 
 Um Web Service gratuito pode hibernar sem tráfego recebido; nesse estado, o agendamento interno não é garantido. Para execução contínua, prefira um Background Worker disponível no seu plano ou um serviço pago. O endpoint `/health` existe para compatibilidade e monitoramento, não para substituir um worker contínuo.
 

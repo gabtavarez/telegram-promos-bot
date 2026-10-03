@@ -10,7 +10,8 @@ import type {
 export interface DealsStore {
   initialize(): Promise<void>;
   filterUnposted(deals: Deal[]): Promise<Deal[]>;
-  markPosted(id: string, originalUrl: string, now?: Date): Promise<void>;
+  markPosted(id: string, originalUrl: string, now?: Date): Promise<boolean>;
+  unmarkPosted(id: string, originalUrl: string): Promise<void>;
   recordPriceHistory(deals: Deal[], now?: Date): Promise<Map<string, PriceHistoryStats>>;
   savePublishedOffer(offer: PublishedOffer): Promise<void>;
   getPublishedOffers(limit?: number): Promise<PublishedOffer[]>;
@@ -19,6 +20,8 @@ export interface DealsStore {
   listAlerts(userId?: string): Promise<UserAlert[]>;
   removeAlert(userId: string, alertId: string): Promise<boolean>;
   claimAlertNotification(alertId: string, dealId: string): Promise<boolean>;
+  releaseAlertNotification(alertId: string, dealId: string): Promise<void>;
   recordFeedback(feedbackKey: string, userId: string, type: FeedbackType): Promise<FeedbackCounts>;
   claimDailySummary(date: string): Promise<boolean>;
+  releaseDailySummary(date: string): Promise<void>;
 }

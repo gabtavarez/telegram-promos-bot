@@ -13,10 +13,10 @@ export function calculateTavarezScore(deal: Deal): number {
   const qualityPoints = (quality / 12) * 35;
   const discountPoints = deal.discountPercentage !== undefined
     ? Math.min(deal.discountPercentage, 50) / 2
-    : 8;
+    : 0;
   const historyPoints = calculateHistoryPoints(deal.priceHistory);
-  const couponPoints = deal.couponCode ? 5 : 0;
-  return Math.max(0, Math.min(100, Math.round(20 + qualityPoints + discountPoints + historyPoints + couponPoints)));
+  const couponPoints = deal.couponCode && deal.couponVerified ? 10 : 0;
+  return Math.max(0, Math.min(100, Math.round(25 + qualityPoints + discountPoints + historyPoints + couponPoints)));
 }
 
 export function getTavarezScoreLabel(score: number): string {
@@ -27,7 +27,7 @@ export function getTavarezScoreLabel(score: number): string {
 }
 
 function calculateHistoryPoints(history?: PriceHistoryStats): number {
-  if (!history || history.observationDays < 2) return 8;
+  if (!history || history.observationDays < 2) return 0;
   const belowAveragePoints = Math.max(0, Math.min(history.percentBelow30DayAverage, 20)) / 2;
   const lowestPriceBonus = history.isLowestPrice90Days ? 5 : 0;
   return Math.min(15, belowAveragePoints + lowestPriceBonus);

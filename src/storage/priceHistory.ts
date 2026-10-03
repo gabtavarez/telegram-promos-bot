@@ -5,19 +5,23 @@ export type DailyPrices = Record<string, number>;
 
 export function getPriceHistoryDateKeys(now = new Date(), days = 90): string[] {
   const keys: string[] = [];
-  const start = new Date(now);
-  start.setUTCHours(12, 0, 0, 0);
+  const currentBrazilDate = formatBrazilDate(now);
+  const start = new Date(`${currentBrazilDate}T12:00:00-03:00`);
   for (let offset = 0; offset < days; offset += 1) {
     const date = new Date(start);
     date.setUTCDate(start.getUTCDate() - offset);
-    keys.push(new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Sao_Paulo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(date));
+    keys.push(formatBrazilDate(date));
   }
   return keys;
+}
+
+function formatBrazilDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 export function mergeDailyPrices(current: DailyPrices, deals: Deal[]): DailyPrices {

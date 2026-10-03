@@ -27,4 +27,20 @@ describe("Tavarez Score", () => {
     expect(historicalLow.tavarezScore).toBeGreaterThan(normal.tavarezScore!);
     expect(historicalLow.scoreLabel).toBeTruthy();
   });
+
+  it("nao concede pontos de desconto ou historico quando os dados estao ausentes", () => {
+    const withoutEvidence = enrichDealMetrics({
+      ...deal,
+      discountPercentage: undefined,
+      couponCode: undefined,
+    });
+    const withUnverifiedCoupon = enrichDealMetrics({
+      ...deal,
+      discountPercentage: undefined,
+      couponCode: "QUALQUER10",
+    });
+
+    expect(withUnverifiedCoupon.tavarezScore).toBe(withoutEvidence.tavarezScore);
+    expect(withoutEvidence.tavarezScore).toBeLessThan(enrichDealMetrics(deal).tavarezScore!);
+  });
 });

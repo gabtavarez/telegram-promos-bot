@@ -19,6 +19,7 @@ export class DealsJob {
   private lastPublishedAt?: Date;
   private lastPublishedTitle?: string;
   private readonly recentProviders: ProviderName[] = [];
+  private readonly recentCategories: string[] = [];
   private cycleCount = 0;
   private legacyButtonsCleaned = false;
 
@@ -67,7 +68,7 @@ export class DealsJob {
       this.cycleCount += 1;
       if (this.cycleCount % 6 === 0) await this.monitorPublishedOffers(enriched);
 
-      const best = await selectFirstAvailableDeal(available, this.recentProviders);
+      const best = await selectFirstAvailableDeal(available, this.recentProviders, this.recentCategories);
       if (!best) {
         console.log("Nenhuma oferta nova encontrada neste ciclo.");
         return "no-deal";
@@ -75,20 +76,36 @@ export class DealsJob {
 
       const dealWithCoupon = enrichDealMetrics(await this.attachCoupon(best), best.priceHistory);
       const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
-      const message = await this.publisher.publish(dealWithCoupon, affiliateUrl);
-      await this.store.markPosted(best.id, best.originalUrl);
-      await this.store.savePublishedOffer({
-        deal: dealWithCoupon,
-        affiliateUrl,
-        messageId: message.messageId,
-        messageType: message.messageType,
-        feedbackKey: message.feedbackKey,
-        publishedAt: new Date().toISOString(),
-        status: "active",
-      });
+      if (!(await this.store.markPosted(best.id, best.originalUrl))) {
+        console.log("Oferta escolhida ja foi reservada por outra instancia.");
+        return "no-deal";
+      }
+      let message;
+      try {
+        message = await this.publisher.publish(dealWithCoupon, affiliateUrl);
+      } catch (error) {
+        await this.store.unmarkPosted(best.id, best.originalUrl).catch(() => undefined);
+        throw error;
+      }
+      try {
+        await this.store.savePublishedOffer({
+          deal: dealWithCoupon,
+          affiliateUrl,
+          messageId: message.messageId,
+          messageType: message.messageType,
+          feedbackKey: message.feedbackKey,
+          publishedAt: new Date().toISOString(),
+          status: "active",
+        });
+      } catch (error) {
+        // A publicacao ja existe no Telegram e permanece marcada para impedir
+        // duplicacao. O proximo ciclo nao deve reenviar a mesma oferta.
+        console.error("Oferta publicada, mas nao foi possivel salvar seu monitoramento.", error);
+      }
       this.lastPublishedAt = new Date();
       this.lastPublishedTitle = best.title;
       this.rememberProvider(best.provider);
+      this.rememberCategory(best.title);
       console.log(`Oferta publicada: ${best.title}`);
       return "published";
     } finally {
@@ -157,7 +174,11 @@ export class DealsJob {
     const deals = (await this.attachCoupons(await this.collectDeals())).filter(isQualityCandidate);
     const history = await this.recordPriceHistorySafely(deals);
     const enriched = deals.map((deal) => enrichDealMetrics(deal, history.get(deal.id)));
-    const best = await selectFirstAvailableDeal(enriched.filter(isPromotableDeal), this.recentProviders);
+    const best = await selectFirstAvailableDeal(
+      enriched.filter(isPromotableDeal),
+      this.recentProviders,
+      this.recentCategories,
+    );
     if (!best) {
       console.log("Nenhuma oferta encontrada para teste.");
       return;
@@ -202,7 +223,12 @@ export class DealsJob {
 
     const date = formatDateKey(now);
     if (!(await this.store.claimDailySummary(date))) return false;
-    await this.publisher.publishDailySummary(offers);
+    try {
+      await this.publisher.publishDailySummary(offers);
+    } catch (error) {
+      await this.store.releaseDailySummary(date).catch(() => undefined);
+      throw error;
+    }
     console.log(`Resumo diario publicado com ${offers.length} oferta(s).`);
     return true;
   }
@@ -222,20 +248,27 @@ export class DealsJob {
   }
 
   private async attachCoupon(deal: Deal): Promise<Deal> {
-    if (deal.couponCode || !this.couponProvider) return deal;
+    if (deal.couponCode && (!deal.couponEndsAt || Date.parse(deal.couponEndsAt) > Date.now())) return deal;
+    const withoutExpiredCoupon = deal.couponEndsAt && Date.parse(deal.couponEndsAt) <= Date.now()
+      ? { ...deal, couponCode: undefined, couponEndsAt: undefined, couponVerified: undefined }
+      : deal;
+    if (!this.couponProvider) return withoutExpiredCoupon;
     const coupons = await this.couponProvider.getActiveCoupons();
-    const coupon = findCouponForDeal(deal, coupons);
-    return coupon ? { ...deal, couponCode: coupon.code } : deal;
+    const coupon = findCouponForDeal(withoutExpiredCoupon, coupons);
+    return coupon ? applyCoupon(withoutExpiredCoupon, coupon) : withoutExpiredCoupon;
   }
 
   private async attachCoupons(deals: Deal[]): Promise<Deal[]> {
-    if (!this.couponProvider || deals.every((deal) => deal.couponCode)) return deals;
+    if (!this.couponProvider) return deals;
     const coupons = await this.couponProvider.getActiveCoupons();
     if (coupons.length === 0) return deals;
     return deals.map((deal) => {
-      if (deal.couponCode) return deal;
+      if (deal.couponCode && (!deal.couponEndsAt || Date.parse(deal.couponEndsAt) > Date.now())) return deal;
       const coupon = findCouponForDeal(deal, coupons);
-      return coupon ? { ...deal, couponCode: coupon.code } : deal;
+      if (coupon) return applyCoupon(deal, coupon);
+      return deal.couponEndsAt && Date.parse(deal.couponEndsAt) <= Date.now()
+        ? { ...deal, couponCode: undefined, couponEndsAt: undefined, couponVerified: undefined }
+        : deal;
     });
   }
 
@@ -257,13 +290,14 @@ export class DealsJob {
         matchesDealSearch(candidate, alert.query) &&
         (alert.maxPrice === undefined || candidate.currentPrice <= alert.maxPrice),
       ));
-      if (!deal || (deal.provider === "kabum" && !(await isDealAvailable(deal)))) continue;
+      if (!deal || !(await isDealAvailable(deal))) continue;
       if (!(await this.store.claimAlertNotification(alert.id, deal.id))) continue;
       const affiliateUrl = addAffiliateTag(deal.provider, deal.originalUrl, this.tags);
       try {
         await this.publisher.sendPrivateAlert(alert.userId, deal, affiliateUrl);
         sent += 1;
       } catch (error) {
+        await this.store.releaseAlertNotification(alert.id, deal.id).catch(() => undefined);
         console.warn(`Falha ao enviar alerta ${alert.id} para o usuario.`, error);
       }
     }
@@ -286,11 +320,34 @@ export class DealsJob {
       for (const { offer, availability } of checked) {
         let updated = offer;
         const current = currentById.get(offer.deal.id);
-        if (current && Math.abs(current.currentPrice - offer.deal.currentPrice) >= 0.01) {
+        const refreshedDeal = current
+          ? enrichDealMetrics(await this.attachCoupon({
+              ...current,
+              couponCode: undefined,
+              couponEndsAt: undefined,
+              couponVerified: undefined,
+            }), current.priceHistory)
+          : undefined;
+        const priceChanged = refreshedDeal && Math.abs(refreshedDeal.currentPrice - offer.deal.currentPrice) >= 0.01;
+        const couponChanged = refreshedDeal && (
+          refreshedDeal.couponCode !== offer.deal.couponCode ||
+          refreshedDeal.couponEndsAt !== offer.deal.couponEndsAt
+        );
+        if (refreshedDeal && (priceChanged || couponChanged)) {
           updated = {
             ...updated,
-            deal: enrichDealMetrics({ ...current, couponCode: offer.deal.couponCode }, current.priceHistory),
-            status: "price-changed",
+            deal: refreshedDeal,
+            status: priceChanged ? "price-changed" : "active",
+          };
+        } else if (!current && offer.deal.couponEndsAt && Date.parse(offer.deal.couponEndsAt) <= Date.now()) {
+          updated = {
+            ...updated,
+            deal: enrichDealMetrics({
+              ...offer.deal,
+              couponCode: undefined,
+              couponEndsAt: undefined,
+              couponVerified: undefined,
+            }, offer.deal.priceHistory),
           };
         }
 
@@ -328,6 +385,11 @@ export class DealsJob {
     this.recentProviders.unshift(provider);
     if (this.recentProviders.length > 3) this.recentProviders.length = 3;
   }
+
+  private rememberCategory(title: string): void {
+    this.recentCategories.unshift(getDealCategory(title));
+    if (this.recentCategories.length > 4) this.recentCategories.length = 4;
+  }
 }
 
 export interface CouponIntegrationStatus {
@@ -364,9 +426,10 @@ export function selectBestDeal(deals: Deal[], recentProviders: ProviderName[] = 
 async function selectFirstAvailableDeal(
   deals: Deal[],
   recentProviders: ProviderName[] = [],
+  recentCategories: string[] = [],
 ): Promise<Deal | undefined> {
-  for (const deal of [...deals].sort((a, b) => compareDeals(a, b, recentProviders))) {
-    if (deal.provider !== "kabum" || await isDealAvailable(deal)) return deal;
+  for (const deal of [...deals].sort((a, b) => compareDeals(a, b, recentProviders, recentCategories))) {
+    if (await isDealAvailable(deal)) return deal;
   }
   return undefined;
 }
@@ -375,19 +438,14 @@ export function isPromotableDeal(deal: Deal): boolean {
   const qualityScore = getHardwareQualityScore(deal.title);
   if (qualityScore < 6) return false;
 
-  if (deal.couponCode) return true;
+  if (deal.couponCode && deal.couponVerified && qualityScore >= 6) return true;
   if ((deal.discountPercentage ?? 0) >= 15) return true;
-  if (deal.provider === "kabum" && qualityScore >= 7) return true;
 
   if ((deal.priceHistory?.observationDays ?? 0) >= 3) {
     return (deal.priceHistory?.percentBelow30DayAverage ?? 0) >= 10;
   }
 
-  if (deal.discountPercentage !== undefined) return false;
-
-  // Alguns feeds, especialmente o da Awin, nao informam o preco anterior.
-  // Nesses casos, somente produtos com varios sinais fortes de qualidade entram.
-  return qualityScore >= 8;
+  return false;
 }
 
 export function isQualityCandidate(deal: Deal): boolean {
@@ -401,21 +459,34 @@ export function matchesDealSearch(deal: Deal, query: string): boolean {
   return terms.every((term) => title.includes(term));
 }
 
-function compareDeals(a: Deal, b: Deal, recentProviders: ProviderName[] = []): number {
-  const scoreDifference = getDealSelectionScore(b, recentProviders) - getDealSelectionScore(a, recentProviders);
+function compareDeals(
+  a: Deal,
+  b: Deal,
+  recentProviders: ProviderName[] = [],
+  recentCategories: string[] = [],
+): number {
+  const scoreDifference = getDealSelectionScore(b, recentProviders, recentCategories) -
+    getDealSelectionScore(a, recentProviders, recentCategories);
   if (scoreDifference !== 0) return scoreDifference;
   return a.currentPrice - b.currentPrice;
 }
 
-export function getDealSelectionScore(deal: Deal, recentProviders: ProviderName[] = []): number {
+export function getDealSelectionScore(
+  deal: Deal,
+  recentProviders: ProviderName[] = [],
+  recentCategories: string[] = [],
+): number {
   const quality = Math.max(0, getHardwareQualityScore(deal.title));
   const discount = Math.min(deal.discountPercentage ?? 0, 60);
   const historyBonus = Math.max(0, Math.min(deal.priceHistory?.percentBelow30DayAverage ?? 0, 20));
-  const couponBonus = deal.couponCode ? 8 : 0;
+  const couponBonus = deal.couponCode && deal.couponVerified ? 8 : 0;
   const providerBonus = deal.provider === "kabum" ? 14 : 0;
   const categoryBonus = getCategorySelectionBonus(deal.title);
   const mostRecentPenalty = recentProviders[0] === deal.provider ? 20 : 0;
   const recentPenalty = !mostRecentPenalty && recentProviders.slice(1).includes(deal.provider) ? 8 : 0;
+  const category = getDealCategory(deal.title);
+  const mostRecentCategoryPenalty = recentCategories[0] === category ? 24 : 0;
+  const recentCategoryPenalty = !mostRecentCategoryPenalty && recentCategories.slice(1).includes(category) ? 10 : 0;
   return (deal.tavarezScore ?? quality * 5) +
     discount +
     historyBonus +
@@ -423,7 +494,33 @@ export function getDealSelectionScore(deal: Deal, recentProviders: ProviderName[
     providerBonus +
     categoryBonus -
     mostRecentPenalty -
-    recentPenalty;
+    recentPenalty -
+    mostRecentCategoryPenalty -
+    recentCategoryPenalty;
+}
+
+function applyCoupon(deal: Deal, coupon: Coupon): Deal {
+  return {
+    ...deal,
+    couponCode: coupon.code,
+    couponEndsAt: coupon.endsAt.toISOString(),
+    couponVerified: Boolean(coupon.eligibleItemIds?.some((id) => deal.id.includes(id))) ||
+      /(?:todo\s+(?:o\s+)?site|site\s+inteiro|qualquer\s+produto)/i.test(coupon.terms ?? ""),
+  };
+}
+
+function getDealCategory(title: string): string {
+  const normalized = normalizeSearch(title);
+  if (/\b(?:rtx|gtx|radeon|geforce|rx\s?\d{3,4}|placa de video)\b/.test(normalized)) return "gpu";
+  if (/\b(?:processador|ryzen|intel core|core i[3579])\b/.test(normalized)) return "cpu";
+  if (/\b(?:monitor|ultrawide|144hz|165hz|180hz|240hz)\b/.test(normalized)) return "monitor";
+  if (/\b(?:ssd|nvme|m\.2|hd externo)\b/.test(normalized)) return "armazenamento";
+  if (/\b(?:water cooler|aio|liquid cooler|air cooler|cpu cooler)\b/.test(normalized)) return "cooler";
+  if (/\b(?:teclado|mouse|headset|fone gamer)\b/.test(normalized)) return "periferico";
+  if (/\b(?:smartphone|celular|iphone|galaxy)\b/.test(normalized)) return "celular";
+  if (/\b(?:notebook|laptop)\b/.test(normalized)) return "notebook";
+  if (/\b(?:smart tv|televisor|tv)\b/.test(normalized)) return "tv";
+  return "outros";
 }
 
 function getCategorySelectionBonus(title: string): number {

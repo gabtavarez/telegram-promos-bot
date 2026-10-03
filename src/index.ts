@@ -77,7 +77,7 @@ async function main(): Promise<void> {
     store,
     new TelegramPublisher(env.TELEGRAM_BOT_TOKEN, env.CHANNEL_ID),
     {
-      amazon: env.AMAZON_TAG,
+      amazon: env.AMAZON_TAG ?? "",
       mercadoLivre: env.ML_TAG,
       kabum: env.KABUM_ENABLED
         ? {

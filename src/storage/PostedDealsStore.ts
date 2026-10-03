@@ -78,10 +78,18 @@ export class PostedDealsStore implements DealsStore {
     );
   }
 
-  async markPosted(id: string, originalUrl: string, now = new Date()): Promise<void> {
+  async markPosted(id: string, originalUrl: string, now = new Date()): Promise<boolean> {
+    if (this.hasRecentlyPosted(id, now.getTime()) || this.hasRecentlyPosted(originalUrl, now.getTime())) return false;
     const timestamp = now.toISOString();
     this.records[id] = timestamp;
     this.records[originalUrl] = timestamp;
+    await this.persist();
+    return true;
+  }
+
+  async unmarkPosted(id: string, originalUrl: string): Promise<void> {
+    delete this.records[id];
+    delete this.records[originalUrl];
     await this.persist();
   }
 
@@ -95,7 +103,7 @@ export class PostedDealsStore implements DealsStore {
   }
 
   async savePublishedOffer(offer: PublishedOffer): Promise<void> {
-    this.state.published = [offer, ...this.state.published.filter((item) => item.feedbackKey !== offer.feedbackKey)].slice(0, 100);
+    this.state.published = [offer, ...this.state.published.filter((item) => item.messageId !== offer.messageId)].slice(0, 100);
     await this.persistState();
   }
 
@@ -133,6 +141,11 @@ export class PostedDealsStore implements DealsStore {
     return true;
   }
 
+  async releaseAlertNotification(alertId: string, dealId: string): Promise<void> {
+    delete this.state.alertNotifications[`${alertId}:${dealId}`];
+    await this.persistState();
+  }
+
   async recordFeedback(feedbackKey: string, userId: string, type: FeedbackType): Promise<FeedbackCounts> {
     const entry = this.state.feedback[feedbackKey] ?? { votes: {} };
     entry.votes[userId] = type;
@@ -146,6 +159,11 @@ export class PostedDealsStore implements DealsStore {
     this.state.summaries.push(date);
     await this.persistState();
     return true;
+  }
+
+  async releaseDailySummary(date: string): Promise<void> {
+    this.state.summaries = this.state.summaries.filter((item) => item !== date);
+    await this.persistState();
   }
 
   private async prune(now = Date.now()): Promise<void> {

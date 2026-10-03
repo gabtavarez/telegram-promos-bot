@@ -34,6 +34,7 @@ const HARDWARE_KEYWORDS = [
   "Apple iPhone 15 128GB",
   "Apple iPhone 16 128GB",
 ];
+const QUERY_CONCURRENCY = 4;
 
 const productQuery = (keyword: string) => `{
   productOfferV2(keyword: ${JSON.stringify(keyword)}, listType: 0, sortType: 2, page: 1, limit: 20) {
@@ -92,7 +93,11 @@ export class ShopeeProvider implements AffiliateProvider {
 
   async getDeals(): Promise<Deal[]> {
     try {
-      const results = await Promise.allSettled(HARDWARE_KEYWORDS.map((keyword) => this.queryProducts(keyword)));
+      const results = await mapSettledWithConcurrency(
+        HARDWARE_KEYWORDS,
+        QUERY_CONCURRENCY,
+        (keyword) => this.queryProducts(keyword),
+      );
       const failed = results.filter((result) => result.status === "rejected");
       if (failed.length > 0) console.warn(`Shopee: ${failed.length} busca(s) parcial(is) falharam.`);
 
@@ -106,7 +111,12 @@ export class ShopeeProvider implements AffiliateProvider {
       const deals = products.flatMap((product): Deal[] => {
         const id = product.itemId;
         const title = product.productName?.trim();
-        const currentPrice = parsePrice(product.priceMin) ?? parsePrice(product.price);
+        const directPrice = parsePrice(product.price);
+        const minimumPrice = parsePrice(product.priceMin);
+        const maximumPrice = parsePrice(product.priceMax);
+        const hasMisleadingVariantRange = minimumPrice !== undefined && maximumPrice !== undefined &&
+          maximumPrice > minimumPrice * 1.08;
+        const currentPrice = directPrice ?? minimumPrice;
         const imageUrl = normalizeUrl(product.imageUrl);
         const originalUrl = normalizeShopeeUrl(product.offerLink) ?? normalizeShopeeUrl(product.productLink);
         const discountPercentage = parseDiscount(product.priceDiscountRate);
@@ -114,7 +124,9 @@ export class ShopeeProvider implements AffiliateProvider {
           ? roundPrice(currentPrice / (1 - discountPercentage / 100))
           : undefined;
 
-        if (!id || !title || !currentPrice || !imageUrl || !originalUrl) return [];
+        if (!id || !title || !currentPrice || !imageUrl || !originalUrl || hasMisleadingVariantRange) return [];
+        const rating = parseRating(product.ratingStar);
+        if (rating !== undefined && rating < 4.3) return [];
         if (!isPcHardwareDeal(title)) return [];
 
         return [{
@@ -178,6 +190,35 @@ function parseDiscount(value?: string | number): number | undefined {
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
   const percentage = parsed <= 1 ? parsed * 100 : parsed;
   return Math.min(99, Math.round(percentage));
+}
+
+function parseRating(value?: string | number): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = typeof value === "number" ? value : Number.parseFloat(value.replace(",", "."));
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 5 ? parsed : undefined;
+}
+
+async function mapSettledWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      try {
+        results[index] = { status: "fulfilled", value: await mapper(items[index]!) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
 }
 
 function normalizeUrl(value?: string): string | undefined {

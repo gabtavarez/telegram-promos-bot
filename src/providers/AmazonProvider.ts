@@ -50,6 +50,7 @@ export class AmazonProvider implements AffiliateProvider {
         previousPrice,
         discountPercentage: calculateDiscount(currentPrice, previousPrice),
         couponCode,
+        couponVerified: Boolean(couponCode),
       });
     });
 

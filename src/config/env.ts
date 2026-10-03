@@ -18,7 +18,7 @@ const optionalUrl = z.preprocess((value) => (value === "" ? undefined : value), 
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(10),
   CHANNEL_ID: z.string().min(2),
-  AMAZON_TAG: z.string().min(1),
+  AMAZON_TAG: optionalString,
   ML_TAG: z.string().min(1),
   AMAZON_DEALS_URL: z.url().default("https://www.amazon.com.br/deals?node=16339926011"),
   ML_DEALS_URL: z
@@ -60,6 +60,13 @@ const envSchema = z.object({
   UPSTASH_REDIS_REST_TOKEN: optionalString,
   PORT: z.coerce.number().int().positive().optional(),
 })
+  .refine(
+    (value) => !value.AMAZON_ENABLED || Boolean(value.AMAZON_TAG),
+    {
+      message: "AMAZON_TAG e obrigatoria quando AMAZON_ENABLED=true",
+      path: ["AMAZON_TAG"],
+    },
+  )
   .refine(
     (value) => Boolean(value.UPSTASH_REDIS_REST_URL) === Boolean(value.UPSTASH_REDIS_REST_TOKEN),
     {

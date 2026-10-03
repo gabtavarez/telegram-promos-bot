@@ -44,12 +44,12 @@ describe("deal selection", () => {
     expect(isPromotableDeal({ ...qualityDeal, title: "SSD 128GB generico", discountPercentage: 70 })).toBe(false);
   });
 
-  it("aceita sem percentual apenas produtos com muitos sinais fortes", () => {
+  it("nao aceita produto sem evidencia de promocao apenas pelo nome", () => {
     expect(isPromotableDeal({
       ...base,
       title: "Placa Mae Asus B650 AM5 DDR5 Ryzen",
       discountPercentage: undefined,
-    })).toBe(true);
+    })).toBe(false);
     expect(isPromotableDeal({
       ...base,
       title: "Memoria Kingston 16GB DDR4",
@@ -57,13 +57,23 @@ describe("deal selection", () => {
     })).toBe(false);
   });
 
-  it("permite bons produtos da Kabum mesmo sem percentual de desconto no feed", () => {
+  it("exige evidencia de promocao tambem para produtos da Kabum", () => {
     expect(isPromotableDeal({
       ...base,
       provider: "kabum",
       title: "Fonte ATX MSI MAG A650BN 650W 80 Plus Bronze",
       discountPercentage: undefined,
-    })).toBe(true);
+    })).toBe(false);
+  });
+
+  it("aceita cupom somente quando a elegibilidade do produto foi verificada", () => {
+    const couponDeal = {
+      ...base,
+      title: "SSD NVMe Kingston Fury Renegade 1TB PCIe 4.0",
+      couponCode: "SSD20",
+    };
+    expect(isPromotableDeal(couponDeal)).toBe(false);
+    expect(isPromotableDeal({ ...couponDeal, couponVerified: true })).toBe(true);
   });
 
   it("prioriza water cooler com tela sobre air cooler comum", () => {
@@ -109,5 +119,13 @@ describe("deal selection", () => {
       getDealSelectionScore(sameStore, ["shopee"]),
     );
     expect(selectBestDeal([sameStore, otherStore], ["shopee"])?.id).toBe("other");
+  });
+
+  it("penaliza repeticao recente da mesma categoria", () => {
+    const gpu = { ...base, id: "gpu", title: "Placa de video RTX 4060 8GB", discountPercentage: 25 };
+    const monitor = { ...base, id: "monitor", title: "Monitor Gamer LG 180Hz IPS", discountPercentage: 25 };
+
+    expect(getDealSelectionScore(monitor, [], ["gpu"]))
+      .toBeGreaterThan(getDealSelectionScore(gpu, [], ["gpu"]));
   });
 });

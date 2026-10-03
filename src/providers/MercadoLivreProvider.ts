@@ -60,6 +60,7 @@ export class MercadoLivreProvider implements AffiliateProvider {
         previousPrice,
         discountPercentage: calculateDiscount(currentPrice, previousPrice),
         couponCode,
+        couponVerified: Boolean(couponCode),
       });
     });
 

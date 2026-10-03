@@ -66,6 +66,7 @@ describe("provider delivery checks", () => {
       provider: "amazon",
       currentPrice: 399.9,
       couponCode: "TECH20",
+      couponVerified: true,
     });
     expect(deals[0]?.originalUrl).toBe("https://www.amazon.com.br/dp/B0CHX12345");
   });
@@ -104,6 +105,7 @@ describe("provider delivery checks", () => {
       provider: "mercado-livre",
       currentPrice: 349.9,
       couponCode: "SSD50",
+      couponVerified: true,
     });
   });
 
@@ -283,6 +285,32 @@ describe("provider delivery checks", () => {
     expect(axiosMocks.post.mock.calls[0]?.[2]?.headers.Authorization).toMatch(
       /^SHA256 Credential=app-id, Timestamp=\d+, Signature=[a-f0-9]{64}$/,
     );
+  });
+
+  it("bloqueia preco-isca da Shopee quando as variacoes possuem grande diferenca", async () => {
+    axiosMocks.post.mockResolvedValue({
+      data: {
+        data: {
+          productOfferV2: {
+            nodes: [{
+              itemId: "555",
+              shopId: "777",
+              productName: "SSD NVMe Kingston 1TB M.2 PCIe 4.0",
+              priceMin: "49.90",
+              priceMax: "499.90",
+              imageUrl: "https://example.com/ssd.jpg",
+              offerLink: "https://s.shopee.com.br/abc123",
+              priceDiscountRate: 50,
+              ratingStar: 4.8,
+            }],
+          },
+        },
+      },
+    });
+
+    const deals = await new ShopeeProvider({ appId: "app-id", appSecret: "secret" }).getDeals();
+
+    expect(deals).toEqual([]);
   });
 
   it("extracts only quality AliExpress deals with affiliate links", async () => {

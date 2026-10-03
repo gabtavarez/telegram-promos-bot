@@ -15,6 +15,14 @@ const OUT_OF_STOCK_MARKERS = [
   /schema\.org\/OutOfStock/i,
   /["']availability["']\s*:\s*["'][^"']*OutOfStock/i,
 ];
+const PURCHASE_MARKERS = [
+  /comprar\s+agora/i,
+  /adicionar\s+ao\s+carrinho/i,
+  /buy\s+now/i,
+  /add\s+to\s+cart/i,
+  /schema\.org\/InStock/i,
+  /["']availability["']\s*:\s*["'][^"']*InStock/i,
+];
 
 export async function isDealAvailable(deal: Deal): Promise<boolean> {
   const result = await checkDealAvailability(deal);
@@ -29,13 +37,14 @@ export async function checkDealAvailability(deal: Deal): Promise<DealAvailabilit
     const response = await http.get<string>(deal.originalUrl);
     const page = typeof response.data === "string" ? response.data : String(response.data);
     const unavailable = OUT_OF_STOCK_MARKERS.some((marker) => marker.test(page));
+    const purchasable = PURCHASE_MARKERS.some((marker) => marker.test(page));
 
     if (unavailable) {
       console.log(`Oferta ignorada por falta de estoque: ${deal.title}`);
       return "unavailable";
     }
 
-    return "available";
+    return purchasable ? "available" : "unknown";
   } catch (error) {
     if (axios.isAxiosError(error) && (error.response?.status === 404 || error.response?.status === 410)) {
       console.log(`Oferta ignorada porque a pagina nao existe mais: ${deal.title}`);

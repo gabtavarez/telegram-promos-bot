@@ -48,7 +48,7 @@ export class AwinCouponProvider implements CouponProvider {
   }
 
   async getActiveCoupons(): Promise<Coupon[]> {
-    if (Date.now() < this.cacheExpiresAt) return this.cache;
+    if (Date.now() < this.cacheExpiresAt) return activeCoupons(this.cache);
 
     try {
       const offers: AwinOffer[] = [];
@@ -62,7 +62,7 @@ export class AwinCouponProvider implements CouponProvider {
       this.cacheExpiresAt = Date.now() + CACHE_DURATION_MS;
       this.lastError = undefined;
       console.log(`Awin: ${this.cache.length} cupom(ns) ativo(s) encontrado(s).`);
-      return this.cache;
+      return activeCoupons(this.cache);
     } catch (error) {
       const message = axios.isAxiosError(error)
         ? `${error.response?.status ?? error.code ?? "HTTP_ERROR"}: ${error.message}`
@@ -70,8 +70,9 @@ export class AwinCouponProvider implements CouponProvider {
           ? error.message
           : String(error);
       this.lastError = message;
+      this.cacheExpiresAt = Date.now() + 60_000;
       console.error(`Falha ao consultar cupons da Awin: ${message}`);
-      return this.cache;
+      return activeCoupons(this.cache);
     }
   }
 
@@ -158,4 +159,8 @@ function parseDate(value?: string): Date | undefined {
   if (!value) return undefined;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function activeCoupons(coupons: Coupon[], now = Date.now()): Coupon[] {
+  return coupons.filter((coupon) => coupon.startsAt.getTime() <= now && coupon.endsAt.getTime() > now);
 }

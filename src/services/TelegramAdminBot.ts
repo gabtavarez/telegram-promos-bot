@@ -218,8 +218,7 @@ export class TelegramAdminBot {
       .start({ onStart: () => console.log("Comandos e alertas do Telegram ativos.") })
       .catch((error) => {
         console.error("Nao foi possivel iniciar os comandos do Telegram.", error);
-        if (attempt >= 6) return;
-        const delayMs = 15_000;
+        const delayMs = Math.min(5 * 60_000, 15_000 * 2 ** Math.min(attempt - 1, 5));
         console.warn(`Nova tentativa de conexao com o Telegram em ${delayMs / 1_000}s.`);
         setTimeout(() => this.startPolling(attempt + 1), delayMs);
       });

@@ -49,6 +49,14 @@ describe("isDealAvailable", () => {
     expect(mocks.get).toHaveBeenCalledOnce();
   });
 
+  it("prioriza o aviso de esgotado mesmo quando a pagina contem compra de recomendacoes", async () => {
+    mocks.get.mockResolvedValue({
+      data: "<div>Produto esgotado</div><main><button>Comprar agora</button></main>",
+    });
+
+    await expect(isDealAvailable({ ...kabumDeal, provider: "mercado-livre" })).resolves.toBe(false);
+  });
+
   it("bloqueia a oferta se a verificacao da Kabum falhar", async () => {
     mocks.get.mockRejectedValue(new Error("timeout"));
 

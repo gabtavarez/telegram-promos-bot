@@ -6,13 +6,14 @@ import {
 } from "../src/coupons/MercadoLivreCouponProvider.js";
 
 describe("MercadoLivreCouponProvider", () => {
-  it("extrai automaticamente cupons ativos com codigo e compra minima", () => {
+  it("extrai cupom oficial somente quando os termos confirmam todo o site", () => {
     const coupons = extractMercadoLivreCoupons(`
       <html><body>
         <h2>CUPONS</h2>
         <p>Cupom VALEDESCONTO</p>
         <p>Cupom válido de 01/10/26 até 05/10/26 às 23h59.</p>
         <p>Desconto de até 15% em compra a partir de R$ 499, com desconto máximo de R$ 150.</p>
+        <p>Válido em todo o site.</p>
       </body></html>
     `, new Date("2026-10-02T15:00:00-03:00"));
 
@@ -22,6 +23,18 @@ describe("MercadoLivreCouponProvider", () => {
       advertiserName: "Mercado Livre",
       minimumPurchase: 499,
     });
+  });
+
+  it("nao transforma cupom oficial de itens selecionados em cupom geral", () => {
+    const coupons = extractMercadoLivreCoupons(`
+      <html><body>
+        <p>Cupom VALEDESCONTO</p>
+        <p>Cupom válido de 01/10/26 até 05/10/26.</p>
+        <p>Válido somente em itens selecionados.</p>
+      </body></html>
+    `, new Date("2026-10-02T15:00:00-03:00"));
+
+    expect(coupons).toEqual([]);
   });
 
   it("ignora cupons expirados e frases comuns que nao sao codigos", () => {

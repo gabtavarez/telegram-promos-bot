@@ -45,7 +45,7 @@ export class MercadoLivreCouponProvider implements CouponProvider {
   private lastError?: string;
 
   async getActiveCoupons(): Promise<Coupon[]> {
-    if (Date.now() < this.cacheExpiresAt) return this.cache;
+    if (Date.now() < this.cacheExpiresAt) return activeCoupons(this.cache);
 
     try {
       const now = new Date();
@@ -71,12 +71,12 @@ export class MercadoLivreCouponProvider implements CouponProvider {
         `Mercado Livre: ${this.cache.length} cupom(ns) automatico(s) com codigo; ` +
         `${publicCoupons.length} validado(s) por lista de produtos.`,
       );
-      return this.cache;
+      return activeCoupons(this.cache);
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
       this.cacheExpiresAt = Date.now() + 60_000;
       console.warn(`Falha ao consultar cupons do Mercado Livre: ${this.lastError}`);
-      return this.cache;
+      return activeCoupons(this.cache);
     }
   }
 
@@ -92,8 +92,7 @@ export class MercadoLivreCouponProvider implements CouponProvider {
         ? extractMercadoLivreItemIds(result.value.data)
         : []))];
       const explicitlyStoreWide = /(?:todo\s+(?:o\s+)?site|site\s+inteiro|qualquer\s+produto)/i.test(signal.text);
-      const confirmedByMultipleSources = signal.sources.length >= 2;
-      if (eligibleItemIds.length === 0 && !explicitlyStoreWide && !confirmedByMultipleSources) return undefined;
+      if (eligibleItemIds.length === 0 && !explicitlyStoreWide) return undefined;
 
       return {
         code: signal.code,
@@ -109,9 +108,7 @@ export class MercadoLivreCouponProvider implements CouponProvider {
         )),
         exclusive: true,
         minimumPurchase: signal.minimumPurchase,
-        eligibleItemIds: confirmedByMultipleSources || explicitlyStoreWide
-          ? undefined
-          : eligibleItemIds.length ? eligibleItemIds : undefined,
+        eligibleItemIds: explicitlyStoreWide ? undefined : eligibleItemIds,
         confidence: signal.sources.length,
       };
     }));
@@ -139,6 +136,10 @@ export function extractMercadoLivreCoupons(html: string, now = new Date()): Coup
     if (!validity || validity.startsAt.getTime() > now.getTime() || validity.endsAt.getTime() < now.getTime()) {
       continue;
     }
+    const explicitlyStoreWide = /(?:todo\s+(?:o\s+)?site|site\s+inteiro|qualquer\s+produto)/i.test(context);
+    // A pagina de termos tambem lista cupons limitados a categorias, vendedores
+    // ou itens selecionados. Sem uma lista verificavel, nao os tratamos como gerais.
+    if (!explicitlyStoreWide) continue;
 
     coupons.push({
       code,
@@ -322,4 +323,8 @@ function mergeCoupons(coupons: Coupon[]): Coupon[] {
     });
   }
   return [...merged.values()];
+}
+
+function activeCoupons(coupons: Coupon[], now = Date.now()): Coupon[] {
+  return coupons.filter((coupon) => coupon.startsAt.getTime() <= now && coupon.endsAt.getTime() > now);
 }
