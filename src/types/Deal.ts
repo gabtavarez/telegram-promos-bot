@@ -16,6 +16,4 @@ export interface Deal {
   couponEndsAt?: string;
   couponVerified?: boolean;
   priceHistory?: PriceHistoryStats;
-  tavarezScore?: number;
-  scoreLabel?: string;
 }

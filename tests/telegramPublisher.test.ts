@@ -49,11 +49,9 @@ describe("formatCaption", () => {
     expect(caption).not.toContain("\nhttps://www.kabum.com.br/produto/123/ssd");
   });
 
-  it("mostra Tavarez Score sem exibir o historico de preco", () => {
+  it("nao mostra Tavarez Score nem o historico de preco", () => {
     const caption = formatCaption({
       ...baseDeal,
-      tavarezScore: 88,
-      scoreLabel: "Excelente",
       priceHistory: {
         lowestPrice90Days: 299.9,
         averagePrice30Days: 350,
@@ -64,7 +62,7 @@ describe("formatCaption", () => {
       },
     }, baseDeal.originalUrl);
 
-    expect(caption).toContain("Tavarez Score: <b>88/100 — Excelente</b>");
+    expect(caption).not.toContain("Tavarez Score");
     expect(caption).not.toContain("abaixo da média");
     expect(caption).not.toContain("Menor preço");
   });

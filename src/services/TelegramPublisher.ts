@@ -58,11 +58,6 @@ export class TelegramPublisher {
     });
   }
 
-  async removeCommunityButtons(offer: PublishedOffer): Promise<void> {
-    const keyboard = offer.status === "soldout" ? new InlineKeyboard() : buildOfferKeyboard(offer.affiliateUrl);
-    await this.bot.api.editMessageReplyMarkup(this.channelId, offer.messageId, { reply_markup: keyboard });
-  }
-
   async sendPrivateAlert(userId: string, deal: Deal, affiliateUrl: string): Promise<void> {
     const caption = [`🔔 <b>ALERTA ENCONTRADO</b>`, "", formatCaption(deal, affiliateUrl)].join("\n");
     const keyboard = new InlineKeyboard().url("✅ VER OFERTA", affiliateUrl);
@@ -79,15 +74,14 @@ export class TelegramPublisher {
 
   async publishDailySummary(offers: PublishedOffer[]): Promise<void> {
     const lines = offers.map((offer, index) => {
-      const score = offer.deal.tavarezScore ? ` · Score ${offer.deal.tavarezScore}` : "";
       return `${index + 1}. <a href="${escapeHtml(offer.affiliateUrl)}">${escapeHtml(offer.deal.title)}</a>\n` +
-        `💰 ${currency.format(offer.deal.currentPrice)}${score}`;
+        `💰 ${currency.format(offer.deal.currentPrice)}`;
     });
     await this.bot.api.sendMessage(this.channelId, [
       "🏆 <b>AS MELHORES OFERTAS DO DIA</b>",
       "",
       ...lines.flatMap((line) => [line, ""]),
-      "📌 Seleção automática pelas notas de qualidade, preço e desconto.",
+      "📌 Seleção automática por qualidade, preço, desconto e diversidade.",
     ].join("\n"), { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
   }
 }
@@ -101,9 +95,6 @@ export function formatCaption(
   const category = getCategoryHashtag(deal.title);
   const coupon = deal.couponCode ? ["", `🎟️ Cupom: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
   const visibleUrl = affiliateUrl;
-  const score = deal.tavarezScore
-    ? ["", `🏅 Tavarez Score: <b>${deal.tavarezScore}/100 — ${escapeHtml(deal.scoreLabel ?? "")}</b>`]
-    : [];
   const statusLine = status === "soldout"
     ? ["❌ <b>OFERTA ESGOTADA</b>", ""]
     : status === "price-changed"
@@ -115,7 +106,6 @@ export function formatCaption(
     `🔥 <b>${currency.format(deal.currentPrice)}${discount}</b>`,
     "",
     `<b>${escapeHtml(deal.title)}</b>`,
-    ...score,
     ...coupon,
     "",
     ...(status === "soldout" ? [] : ["✅ Link da Oferta:", escapeHtml(visibleUrl)]),
