@@ -17,21 +17,19 @@ const PRODUCT_FIELDS = [
   "promotion_link",
 ].join(",");
 const HARDWARE_KEYWORDS = [
-  "graphics card",
-  "RX 7600 graphics card",
-  "processor",
-  "SSD NVMe",
-  "DDR5 RAM",
-  "motherboard",
-  "PC power supply",
-  "PC case",
-  "240mm liquid cooler LCD",
-  "360mm AIO water cooler LCD",
   "mechanical keyboard",
   "magnetic keyboard hall effect",
+  "wireless gaming mouse",
   "gaming mouse PAW3395",
-  "monitor arm",
-  "USB dock station",
+  "DDR5 desktop RAM",
+  "DDR4 desktop RAM",
+  "gaming headset 2.4G",
+  "USB gaming headset",
+  "gaming IEM earphone",
+  "240mm AIO water cooler ARGB",
+  "360mm AIO water cooler ARGB",
+  "120mm ARGB PC fan",
+  "140mm ARGB PC fan",
 ];
 
 interface AliExpressConfig {
@@ -116,7 +114,10 @@ export class AliExpressProvider implements AffiliateProvider {
             .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
             .map((product) => [String(product.product_id), product]),
         ).values(),
-      ].filter((product) => product.product_title && isPcHardwareDeal(product.product_title));
+      ].filter((product) =>
+        product.product_title &&
+        isAliExpressFocusProduct(product.product_title) &&
+        isPcHardwareDeal(product.product_title));
 
       if (products.length === 0) return [];
 
@@ -244,6 +245,19 @@ export class AliExpressProvider implements AffiliateProvider {
     const response = await this.client.post<T>("", new URLSearchParams(params));
     return response.data;
   }
+}
+
+export function isAliExpressFocusProduct(title: string): boolean {
+  const normalized = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const keyboard = /\b(?:teclado|keyboard)\b/.test(normalized) &&
+    /\b(?:mecanico|mechanical|magnetico|magnetic|hall\s*effect|gamer|gaming|hot\s*swap)\b/.test(normalized);
+  const mouse = /\bmouse\b/.test(normalized) &&
+    /\b(?:gamer|gaming|paw\s?\d{4}|3395|3950)\b/.test(normalized);
+  const memory = /\b(?:memoria\s+ram|ram|memory)\b/.test(normalized) && /\bddr[45]\b/.test(normalized);
+  const audio = /\b(?:headset|fone\s+gamer|gaming\s+(?:headset|headphone|earphone)|iem)\b/.test(normalized);
+  const waterCooler = /\b(?:water\s*cooler|watercooler|aio|liquid\s+cooler|refrigeracao\s+liquida)\b/.test(normalized);
+  const argbFan = /\b(?:fan|fans|ventoinha|ventoinhas)\b/.test(normalized) && /\bargb\b/.test(normalized);
+  return keyboard || mouse || memory || audio || waterCooler || argbFan;
 }
 
 function chunk<T>(values: T[], size: number): T[][] {

@@ -17,7 +17,7 @@ const HARDWARE_TERMS = [
   /\b(gabinete|case\s+gamer|mid\s+tower|full\s+tower|mini\s+tower|aqu[aá]rio|sff|mini-itx|mini\s+itx)\b/i,
 
   // Perifericos
-  /\b(mouse\s+gamer|mousepad|teclado\s+(?:mec[aâ]nico|magn[eé]tico|hall\s*effect|60\s*%|68\s*%|75\s*%|100\s*%|tkl|gamer)|headset|fone\s+gamer|microfone\s+condenser)(?=\s|$|[,:;()\-])/i,
+  /\b(mouse\s+(?:gamer|gaming)|gaming\s+mouse|mousepad|teclado\s+(?:mec[aâ]nico|magn[eé]tico|hall\s*effect|60\s*%|68\s*%|75\s*%|100\s*%|tkl|gamer)|mechanical\s+keyboard|magnetic\s+keyboard|headset|gaming\s+(?:headset|headphone|earphone)|fone\s+gamer|iem|microfone\s+condenser)(?=\s|$|[,:;()\-])/i,
   /\b(monitor\s+(?:gamer|ultrawide|144hz|165hz|240hz|alta\s+taxa|alta\s+frequ[eê]ncia)|ultrawide|144hz|165hz|240hz)\b/i,
   /\bcadeira\s+(?:ergon[oô]mica|gamer|de\s+escrit[oó]rio)\b/i,
 
@@ -94,6 +94,7 @@ const QUALITY_SIGNALS = [
   /\b(ips|va|oled|qled|4k|uhd|ultrawide|(?:75|100|120|144|165|180|240)hz|1ms)\b/i,
   /\b(mec[aâ]nico|magn[eé]tico|hall\s*effect|abnt2|switch|tkl)\b|(?:60|68|75|100)\s*%/i,
   /\b(dpi|paw\s?3395|hero|lightspeed|hot\s*swap|pwm|argb|120mm|140mm|heatpipe|screenbar|dock\s+station)\b/i,
+  /\b(7\.1|2\.4g(?:hz)?|low\s+latency|surround|usb\s+headset|headset\s+usb|iem)\b/i,
   /\b(mx-?[46]|kryonaut|nt-h[12]|xtm(?:50|70)|mastergel|thermal\s+grizzly)\b/i,
   /\b(bra[cç]o\s+articulado|pegboard|painel\s+perfurado|suporte\s+para\s+(?:headset|notebook)|cabo(?:s)?\s+extensor(?:es)?\s+sleeved)\b/i,
   /\b(ergon[oô]mica|apoio\s+lombar|encosto\s+mesh|bra[cç]o\s+[234]d|ajuste\s+de\s+altura|girat[oó]ria)\b/i,

@@ -26,7 +26,7 @@ vi.mock("axios", () => ({
 }));
 
 import { AmazonProvider } from "../src/providers/AmazonProvider.js";
-import { AliExpressProvider } from "../src/providers/aliexpress.provider.js";
+import { AliExpressProvider, isAliExpressFocusProduct } from "../src/providers/aliexpress.provider.js";
 import { KabumProvider } from "../src/providers/KabumProvider.js";
 import { MercadoLivreProvider } from "../src/providers/MercadoLivreProvider.js";
 import { ShopeeProvider } from "../src/providers/ShopeeProvider.js";
@@ -314,9 +314,11 @@ describe("provider delivery checks", () => {
   });
 
   it("extracts only quality AliExpress deals with affiliate links", async () => {
+    const queriedKeywords: string[] = [];
     axiosMocks.post.mockImplementation(async (_url, body: URLSearchParams) => {
       const method = body.get("method");
       if (method === "aliexpress.affiliate.product.query") {
+        queriedKeywords.push(body.get("keywords") ?? "");
         return {
           data: {
             aliexpress_affiliate_product_query_response: {
@@ -327,9 +329,9 @@ describe("provider delivery checks", () => {
                     product: [
                       {
                         product_id: "1001",
-                        product_title: "SSD NVMe Kingston 1TB M.2 PCIe 4.0",
+                        product_title: "Memória RAM DDR5 Kingston Fury Beast 32GB 6000MHz Desktop",
                         product_detail_url: "https://www.aliexpress.com/item/1001.html",
-                        product_main_image_url: "https://example.com/ali-ssd.jpg",
+                        product_main_image_url: "https://example.com/ali-ram.jpg",
                         target_sale_price: "299.90",
                         target_original_price: "499.90",
                         discount: "40%",
@@ -382,5 +384,24 @@ describe("provider delivery checks", () => {
       originalUrl: "https://s.click.aliexpress.com/e/_quality123",
       currentPrice: 299.9,
     });
+    expect(queriedKeywords).not.toContain("SSD NVMe");
+    expect(queriedKeywords).not.toContain("graphics card");
+    expect(queriedKeywords.every((keyword) =>
+      /keyboard|mouse|ram|headset|earphone|water cooler|pc fan/i.test(keyword),
+    )).toBe(true);
+  });
+
+  it("limits AliExpress products to the requested categories", () => {
+    expect([
+      "Teclado mecânico Redragon switch brown",
+      "Gaming mouse PAW3395 sem fio",
+      "Memória RAM DDR5 Kingston 32GB",
+      "Gaming headset HyperX USB",
+      "Water Cooler Deepcool 360mm ARGB",
+      "Kit 3 fans ARGB Cooler Master 120mm",
+    ].every(isAliExpressFocusProduct)).toBe(true);
+
+    expect(isAliExpressFocusProduct("SSD NVMe Kingston 1TB M.2 PCIe 4.0")).toBe(false);
+    expect(isAliExpressFocusProduct("Placa de vídeo Radeon RX 7600 8GB")).toBe(false);
   });
 });

@@ -7,6 +7,8 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Placa Mae B550 DDR4 Ryzen")).toBe(true);
     expect(isPcHardwareDeal("Fonte Corsair 650W 80 Plus")).toBe(true);
     expect(isPcHardwareDeal("Mouse gamer Logitech 12000 DPI")).toBe(true);
+    expect(getHardwareQualityScore("Gaming headset HyperX USB 7.1 surround")).toBeGreaterThanOrEqual(6);
+    expect(getHardwareQualityScore("IEM JBL gamer low latency")).toBeGreaterThanOrEqual(6);
     expect(isPcHardwareDeal("Teclado mecanico TKL switch brown")).toBe(true);
     expect(isPcHardwareDeal("Teclado magnetico Hall Effect 68% RGB")).toBe(true);
     expect(isPcHardwareDeal("Teclado 75% sem fio RGB")).toBe(true);
