@@ -2,6 +2,9 @@ import axios from "axios";
 import type { Deal } from "../types/Deal.js";
 import { http } from "../utils/http.js";
 
+const PAGE_CACHE_TTL_MS = 60_000;
+const pageCache = new Map<string, { page: string; expiresAt: number }>();
+
 const OUT_OF_STOCK_MARKERS = [
   /produto\s+esgotado/i,
   /produto\s+indispon[ií]vel/i,
@@ -34,8 +37,7 @@ export type DealAvailability = "available" | "unavailable" | "unknown";
 export async function checkDealAvailability(deal: Deal): Promise<DealAvailability> {
 
   try {
-    const response = await http.get<string>(deal.originalUrl);
-    const page = typeof response.data === "string" ? response.data : String(response.data);
+    const page = await fetchDealPage(deal.originalUrl);
     const unavailable = OUT_OF_STOCK_MARKERS.some((marker) => marker.test(page));
     const purchasable = PURCHASE_MARKERS.some((marker) => marker.test(page));
 
@@ -57,4 +59,15 @@ export async function checkDealAvailability(deal: Deal): Promise<DealAvailabilit
     }
     return "unknown";
   }
+}
+
+export async function fetchDealPage(url: string): Promise<string> {
+  const useCache = process.env.NODE_ENV !== "test";
+  const cached = useCache ? pageCache.get(url) : undefined;
+  if (cached && cached.expiresAt > Date.now()) return cached.page;
+
+  const response = await http.get<string>(url);
+  const page = typeof response.data === "string" ? response.data : String(response.data);
+  if (useCache) pageCache.set(url, { page, expiresAt: Date.now() + PAGE_CACHE_TTL_MS });
+  return page;
 }

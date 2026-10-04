@@ -10,6 +10,7 @@ import { findCouponForDeal } from "../coupons/CouponMatcher.js";
 import type { Coupon } from "../coupons/CouponProvider.js";
 import type { FeedbackCounts, FeedbackType, PriceHistoryStats, PublishedOffer, UserAlert } from "../types/BotState.js";
 import { checkDealAvailability, isDealAvailable } from "./DealAvailabilityChecker.js";
+import { enrichDealPayment } from "./DealPaymentEnricher.js";
 
 export class DealsJob {
   private running = false;
@@ -73,7 +74,8 @@ export class DealsJob {
         return "no-deal";
       }
 
-      const dealWithCoupon = withPriceHistory(await this.attachCoupon(best), best.priceHistory);
+      const finalDeal = await enrichDealPayment(best);
+      const dealWithCoupon = withPriceHistory(await this.attachCoupon(finalDeal), best.priceHistory);
       const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
       if (!(await this.store.markPosted(best.id, best.originalUrl))) {
         console.log("Oferta escolhida ja foi reservada por outra instancia.");
@@ -162,7 +164,7 @@ export class DealsJob {
 
     for (const deal of deals) {
       results.push({
-        deal: await this.attachCoupon(deal),
+        deal: await this.attachCoupon(await enrichDealPayment(deal)),
         affiliateUrl: addAffiliateTag(deal.provider, deal.originalUrl, this.tags),
       });
     }
@@ -183,7 +185,8 @@ export class DealsJob {
       return;
     }
 
-    const dealWithCoupon = withPriceHistory(await this.attachCoupon(best), best.priceHistory);
+    const finalDeal = await enrichDealPayment(best);
+    const dealWithCoupon = withPriceHistory(await this.attachCoupon(finalDeal), best.priceHistory);
     const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
     await this.publisher.publish(dealWithCoupon, affiliateUrl);
     console.log(`Oferta de teste publicada: ${best.title}`);
@@ -291,9 +294,10 @@ export class DealsJob {
       ));
       if (!deal || !(await isDealAvailable(deal))) continue;
       if (!(await this.store.claimAlertNotification(alert.id, deal.id))) continue;
+      const finalDeal = await enrichDealPayment(deal);
       const affiliateUrl = addAffiliateTag(deal.provider, deal.originalUrl, this.tags);
       try {
-        await this.publisher.sendPrivateAlert(alert.userId, deal, affiliateUrl);
+        await this.publisher.sendPrivateAlert(alert.userId, finalDeal, affiliateUrl);
         sent += 1;
       } catch (error) {
         await this.store.releaseAlertNotification(alert.id, deal.id).catch(() => undefined);
@@ -319,13 +323,14 @@ export class DealsJob {
       for (const { offer, availability } of checked) {
         let updated = offer;
         const current = currentById.get(offer.deal.id);
-        const refreshedDeal = current
+        const refreshedBase = current ? await enrichDealPayment(current) : undefined;
+        const refreshedDeal = refreshedBase
           ? withPriceHistory(await this.attachCoupon({
-              ...current,
+              ...refreshedBase,
               couponCode: undefined,
               couponEndsAt: undefined,
               couponVerified: undefined,
-            }), current.priceHistory)
+            }), current?.priceHistory)
           : undefined;
         const priceChanged = refreshedDeal && Math.abs(refreshedDeal.currentPrice - offer.deal.currentPrice) >= 0.01;
         const couponChanged = refreshedDeal && (
