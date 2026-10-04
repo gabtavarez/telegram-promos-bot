@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOfferKeyboard, formatCaption } from "../src/services/TelegramPublisher.js";
+import { formatCaption } from "../src/services/TelegramPublisher.js";
 import type { Deal } from "../src/types/Deal.js";
 
 const baseDeal: Deal = {
@@ -97,9 +97,9 @@ describe("formatCaption", () => {
     expect(caption).not.toContain("#GPU");
   });
 
-  it("mantem apenas o botao principal da oferta", () => {
-    const keyboard = buildOfferKeyboard(baseDeal.originalUrl);
-    expect(JSON.stringify(keyboard)).toContain("VER OFERTA");
-    expect(JSON.stringify(keyboard)).not.toContain("Vale a pena");
+  it("mantem o link da oferta visivel sem depender de botao", () => {
+    const caption = formatCaption(baseDeal, baseDeal.originalUrl);
+    expect(caption).toContain("✅ Link da Oferta:");
+    expect(caption).toContain(baseDeal.originalUrl);
   });
 });

@@ -19,12 +19,10 @@ export class TelegramPublisher {
   async publish(deal: Deal, affiliateUrl: string): Promise<PublishedMessageReference> {
     const feedbackKey = getFeedbackKey(deal.id);
     const caption = formatCaption(deal, affiliateUrl);
-    const keyboard = buildOfferKeyboard(affiliateUrl);
     try {
       const message = await this.bot.api.sendPhoto(this.channelId, deal.imageUrl, {
         caption,
         parse_mode: "HTML",
-        reply_markup: keyboard,
       });
       return { messageId: message.message_id, messageType: "photo", feedbackKey };
     } catch (error) {
@@ -32,7 +30,6 @@ export class TelegramPublisher {
       const message = await this.bot.api.sendMessage(this.channelId, caption, {
         parse_mode: "HTML",
         link_preview_options: { is_disabled: false },
-        reply_markup: keyboard,
       });
       return { messageId: message.message_id, messageType: "text", feedbackKey };
     }
@@ -40,21 +37,19 @@ export class TelegramPublisher {
 
   async editPublishedOffer(offer: PublishedOffer): Promise<void> {
     const caption = formatCaption(offer.deal, offer.affiliateUrl, offer.status);
-    const keyboard = offer.status === "soldout"
-      ? new InlineKeyboard()
-      : buildOfferKeyboard(offer.affiliateUrl);
+    const emptyKeyboard = new InlineKeyboard();
     if (offer.messageType === "photo") {
       await this.bot.api.editMessageCaption(this.channelId, offer.messageId, {
         caption,
         parse_mode: "HTML",
-        reply_markup: keyboard,
+        reply_markup: emptyKeyboard,
       });
       return;
     }
     await this.bot.api.editMessageText(this.channelId, offer.messageId, caption, {
       parse_mode: "HTML",
       link_preview_options: { is_disabled: false },
-      reply_markup: keyboard,
+      reply_markup: emptyKeyboard,
     });
   }
 
@@ -115,10 +110,6 @@ export function formatCaption(
       ? "ℹ️ Esta publicação foi atualizada automaticamente pelo bot."
       : undefined,
   ].filter((line): line is string => line !== undefined).join("\n");
-}
-
-export function buildOfferKeyboard(affiliateUrl: string): InlineKeyboard {
-  return new InlineKeyboard().url("✅ VER OFERTA", affiliateUrl);
 }
 
 export function getFeedbackKey(dealId: string): string {
