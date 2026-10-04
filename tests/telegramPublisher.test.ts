@@ -102,4 +102,24 @@ describe("formatCaption", () => {
     expect(caption).toContain("✅ Link da Oferta:");
     expect(caption).toContain(baseDeal.originalUrl);
   });
+
+  it("destaca Pix e mostra o parcelamento quando a loja os informa", () => {
+    const caption = formatCaption({
+      ...baseDeal,
+      currentPrice: 779,
+      pixPrice: 779,
+      cardPrice: 849,
+      installmentText: "em até 10x de R$ 84,90",
+      discountPercentage: 24,
+    }, baseDeal.originalUrl);
+
+    expect(caption).toContain("🔥 <b>R$ 779,00 no Pix (-24%)</b>");
+    expect(caption).toContain("💳 R$ 849,00 — em até 10x de R$ 84,90");
+  });
+
+  it("nao chama um preco comum de Pix", () => {
+    const caption = formatCaption(baseDeal, baseDeal.originalUrl);
+    expect(caption).not.toContain("no Pix");
+    expect(caption).not.toContain("💳");
+  });
 });

@@ -127,6 +127,28 @@ describe("provider delivery checks", () => {
     expect(deals[0]?.originalUrl).toBe("https://www.mercadolivre.com.br/monitor-lg/p/MLB79391475");
   });
 
+  it("extrai Pix e parcelamento explicitos do Mercado Livre", async () => {
+    httpMocks.get.mockResolvedValue({
+      data: `
+        <div class="promotion-item">
+          <a href="https://www.mercadolivre.com.br/monitor-lg/p/MLB123"></a>
+          <p class="promotion-item__title">Monitor Gamer LG UltraGear 27 180Hz IPS</p>
+          <img src="https://example.com/monitor.jpg" />
+          <span class="andes-money-amount"><span class="andes-money-amount__fraction">849</span></span>
+          <span>R$ 779,00 no Pix ou em até 10x de R$ 84,90 sem juros</span>
+        </div>`,
+    });
+
+    const [deal] = await new MercadoLivreProvider("https://ml.example/ofertas").getDeals();
+
+    expect(deal).toMatchObject({
+      currentPrice: 779,
+      pixPrice: 779,
+      cardPrice: 849,
+      installmentText: "em até 10x de R$ 84,90",
+    });
+  });
+
   it("extracts only quality Kabum deals", async () => {
     axiosMocks.get.mockResolvedValue({
       data: [

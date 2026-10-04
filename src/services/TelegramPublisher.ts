@@ -87,6 +87,12 @@ export function formatCaption(
   status: PublishedOfferStatus = "active",
 ): string {
   const discount = deal.discountPercentage ? ` (-${deal.discountPercentage}%)` : "";
+  const primaryPrice = deal.pixPrice
+    ? `🔥 <b>${currency.format(deal.pixPrice)} no Pix${discount}</b>`
+    : `🔥 <b>${currency.format(deal.currentPrice)}${discount}</b>`;
+  const secondaryPayment = deal.pixPrice
+    ? formatSecondaryPayment(deal)
+    : undefined;
   const category = getCategoryHashtag(deal.title);
   const coupon = deal.couponCode ? ["", `🎟️ Cupom: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
   const visibleUrl = affiliateUrl;
@@ -98,7 +104,8 @@ export function formatCaption(
 
   return [
     ...statusLine,
-    `🔥 <b>${currency.format(deal.currentPrice)}${discount}</b>`,
+    primaryPrice,
+    secondaryPayment,
     "",
     `<b>${escapeHtml(deal.title)}</b>`,
     ...coupon,
@@ -110,6 +117,13 @@ export function formatCaption(
       ? "ℹ️ Esta publicação foi atualizada automaticamente pelo bot."
       : undefined,
   ].filter((line): line is string => line !== undefined).join("\n");
+}
+
+function formatSecondaryPayment(deal: Deal): string | undefined {
+  if (deal.cardPrice && deal.cardPrice > (deal.pixPrice ?? 0)) {
+    return `💳 ${currency.format(deal.cardPrice)}${deal.installmentText ? ` — ${deal.installmentText}` : ""}`;
+  }
+  return deal.installmentText ? `💳 ${deal.installmentText}` : undefined;
 }
 
 export function getFeedbackKey(dealId: string): string {

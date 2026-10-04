@@ -4,6 +4,7 @@ import { calculateDiscount, parseBrlPrice } from "../utils/price.js";
 import { http } from "../utils/http.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
 import { extractVisibleCouponCode } from "../utils/couponCode.js";
+import { extractPaymentDetails } from "../utils/payment.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
 export class AmazonProvider implements AffiliateProvider {
@@ -27,13 +28,15 @@ export class AmazonProvider implements AffiliateProvider {
         .text()
         .trim();
       const imageUrl = card.find("img").first().attr("src");
-      const currentPrice = parseBrlPrice(
+      const listedPrice = parseBrlPrice(
         card.find(".a-price:not(.a-text-price) .a-offscreen, [data-testid='price-block-deal-price']").first().text(),
       );
       const previousPrice = parseBrlPrice(
         card.find(".a-text-price .a-offscreen, [data-testid='price-block-list-price']").first().text(),
       );
       const couponCode = extractVisibleCouponCode(card.text());
+      const payment = extractPaymentDetails(card.text());
+      const currentPrice = payment.pixPrice ?? listedPrice;
 
       if (!href || !asin || !title || !imageUrl || !currentPrice) return;
       if (!isPcHardwareDeal(title)) return;
@@ -47,6 +50,9 @@ export class AmazonProvider implements AffiliateProvider {
         originalUrl: originalUrl.toString(),
         imageUrl,
         currentPrice,
+        pixPrice: payment.pixPrice,
+        cardPrice: payment.cardPrice ?? (payment.pixPrice && listedPrice && listedPrice > payment.pixPrice ? listedPrice : undefined),
+        installmentText: payment.installmentText,
         previousPrice,
         discountPercentage: calculateDiscount(currentPrice, previousPrice),
         couponCode,

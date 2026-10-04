@@ -4,6 +4,7 @@ import type { Deal } from "../types/Deal.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
 import { http } from "../utils/http.js";
 import { calculateDiscount, parseBrlPrice } from "../utils/price.js";
+import { extractPaymentDetails } from "../utils/payment.js";
 import { extractVisibleCouponCode } from "../utils/couponCode.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
@@ -31,7 +32,7 @@ export class MercadoLivreProvider implements AffiliateProvider {
         .trim();
       const image = card.find("img").first();
       const imageUrl = image.attr("data-src") || image.attr("src");
-      const currentPrice = readPrice(card, [
+      const listedPrice = readPrice(card, [
         ".andes-money-amount:not(.andes-money-amount--previous) .andes-money-amount__fraction",
         ".poly-price__current .andes-money-amount__fraction",
       ]);
@@ -40,6 +41,8 @@ export class MercadoLivreProvider implements AffiliateProvider {
         ".andes-money-amount__discount + .andes-money-amount .andes-money-amount__fraction",
       ]);
 
+      const payment = extractPaymentDetails(card.text());
+      const currentPrice = payment.pixPrice ?? listedPrice;
       if (!href || !title || !imageUrl || !currentPrice) return;
       if (!isPcHardwareDeal(title)) return;
 
@@ -57,6 +60,9 @@ export class MercadoLivreProvider implements AffiliateProvider {
         originalUrl: originalUrl.toString(),
         imageUrl,
         currentPrice,
+        pixPrice: payment.pixPrice,
+        cardPrice: payment.cardPrice ?? (payment.pixPrice && listedPrice && listedPrice > payment.pixPrice ? listedPrice : undefined),
+        installmentText: payment.installmentText,
         previousPrice,
         discountPercentage: calculateDiscount(currentPrice, previousPrice),
         couponCode,

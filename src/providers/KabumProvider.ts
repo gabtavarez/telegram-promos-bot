@@ -3,6 +3,7 @@ import axios, { type AxiosInstance } from "axios";
 import type { Deal } from "../types/Deal.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
 import { calculateDiscount } from "../utils/price.js";
+import { extractPaymentDetails } from "../utils/payment.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
 interface KabumConfig {
@@ -23,6 +24,7 @@ interface AwinFeedProduct {
   sale_price?: string | number;
   availability?: string;
   condition?: string;
+  payment_text?: string;
 }
 
 type AwinFeedRecord = Record<string, unknown> & {
@@ -76,7 +78,9 @@ export class KabumProvider implements AffiliateProvider {
         const imageUrl = normalizeUrl(product.image_link);
         const regularPrice = parseFeedPrice(product.price);
         const salePrice = parseFeedPrice(product.sale_price);
-        const currentPrice = salePrice && regularPrice && salePrice < regularPrice ? salePrice : regularPrice;
+        const payment = extractPaymentDetails(product.payment_text);
+        const listedPrice = salePrice && regularPrice && salePrice < regularPrice ? salePrice : regularPrice;
+        const currentPrice = payment.pixPrice ?? listedPrice;
         const previousPrice = salePrice && regularPrice && salePrice < regularPrice ? regularPrice : undefined;
 
         if (!id || !title || !originalUrl || !imageUrl || !currentPrice) return [];
@@ -102,6 +106,11 @@ export class KabumProvider implements AffiliateProvider {
           displayUrl: getDisplayUrl(product.destination_link ?? product.link),
           imageUrl,
           currentPrice,
+          pixPrice: payment.pixPrice,
+          cardPrice: payment.cardPrice ?? (
+            payment.pixPrice && listedPrice && listedPrice > payment.pixPrice ? listedPrice : undefined
+          ),
+          installmentText: payment.installmentText,
           previousPrice,
           discountPercentage: calculateDiscount(currentPrice, previousPrice),
         }];
@@ -185,6 +194,12 @@ function flattenProduct(record: AwinFeedRecord): AwinFeedProduct {
     sale_price: pickValue(flat, "store_price", "sale_price"),
     availability: pickValue(flat, "in_stock", "stock_status", "availability"),
     condition: pickValue(flat, "condition"),
+    payment_text: [
+      pickValue(flat, "display_price"),
+      pickValue(flat, "promotional_text"),
+      pickValue(flat, "description"),
+      pickValue(flat, "product_short_description"),
+    ].filter((value): value is string => value !== undefined).join(" "),
   };
 }
 
