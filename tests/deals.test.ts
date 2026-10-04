@@ -17,10 +17,10 @@ const base: Deal = {
 };
 
 describe("deal selection", () => {
-  it("prioriza a maior queda de preco validada pelo historico", () => {
+  it("prefers the greatest discount", () => {
     const best = selectBestDeal([
-      { ...base, id: "1", priceHistory: priceHistory(100, 9) },
-      { ...base, id: "2", currentPrice: 200, priceHistory: priceHistory(200, 18) },
+      { ...base, id: "1", discountPercentage: 10 },
+      { ...base, id: "2", discountPercentage: 30, currentPrice: 200 },
     ]);
     expect(best?.id).toBe("2");
   });
@@ -32,21 +32,16 @@ describe("deal selection", () => {
     expect(matchesDealSearch(deal, "memoria ssd")).toBe(false);
   });
 
-  it("exige produto bom e evidencia independente de preco", () => {
+  it("exige produto bom e promocao media quando o desconto e conhecido", () => {
     const qualityDeal = {
       ...base,
       title: "SSD NVMe Kingston 1TB M.2 PCIe 4.0",
       discountPercentage: 20,
     };
 
-    expect(isPromotableDeal(qualityDeal)).toBe(false);
-    expect(isPromotableDeal({ ...qualityDeal, priceHistory: priceHistory(100, 10) })).toBe(true);
-    expect(isPromotableDeal({ ...qualityDeal, priceHistory: priceHistory(100, 4) })).toBe(false);
-    expect(isPromotableDeal({
-      ...qualityDeal,
-      title: "SSD 128GB generico",
-      priceHistory: priceHistory(100, 20),
-    })).toBe(false);
+    expect(isPromotableDeal(qualityDeal)).toBe(true);
+    expect(isPromotableDeal({ ...qualityDeal, discountPercentage: 10 })).toBe(false);
+    expect(isPromotableDeal({ ...qualityDeal, title: "SSD 128GB generico", discountPercentage: 70 })).toBe(false);
   });
 
   it("nao aceita produto sem evidencia de promocao apenas pelo nome", () => {
@@ -71,23 +66,14 @@ describe("deal selection", () => {
     })).toBe(false);
   });
 
-  it("cupom verificado reduz o limiar, mas nao substitui a validacao do preco", () => {
+  it("aceita cupom somente quando a elegibilidade do produto foi verificada", () => {
     const couponDeal = {
       ...base,
       title: "SSD NVMe Kingston Fury Renegade 1TB PCIe 4.0",
       couponCode: "SSD20",
     };
     expect(isPromotableDeal(couponDeal)).toBe(false);
-    expect(isPromotableDeal({
-      ...couponDeal,
-      couponVerified: true,
-      priceHistory: priceHistory(100, 6),
-    })).toBe(true);
-    expect(isPromotableDeal({
-      ...couponDeal,
-      couponVerified: false,
-      priceHistory: priceHistory(100, 6),
-    })).toBe(false);
+    expect(isPromotableDeal({ ...couponDeal, couponVerified: true })).toBe(true);
   });
 
   it("prioriza water cooler com tela sobre air cooler comum", () => {
@@ -143,14 +129,3 @@ describe("deal selection", () => {
       .toBeGreaterThan(getDealSelectionScore(gpu, [], ["gpu"]));
   });
 });
-
-function priceHistory(currentPrice: number, percentBelow30DayAverage: number) {
-  return {
-    lowestPrice90Days: currentPrice,
-    averagePrice30Days: currentPrice / (1 - percentBelow30DayAverage / 100),
-    averagePrice90Days: currentPrice / (1 - percentBelow30DayAverage / 100),
-    observationDays: 10,
-    isLowestPrice90Days: true,
-    percentBelow30DayAverage,
-  };
-}

@@ -12,11 +12,10 @@ const baseDeal: Deal = {
 };
 
 describe("formatCaption", () => {
-  it("nao exibe o desconto declarado pela loja sem validacao independente", () => {
+  it("coloca preco/desconto no topo e produto em destaque abaixo", () => {
     const caption = formatCaption({ ...baseDeal, discountPercentage: 31 }, baseDeal.originalUrl);
 
-    expect(caption).toContain("🔥 <b>R$ 299,90</b>\n\n<b>SSD NVMe 1 TB</b>");
-    expect(caption).not.toContain("-31%");
+    expect(caption).toContain("🔥 <b>R$ 299,90 (-31%)</b>\n\n<b>SSD NVMe 1 TB</b>");
   });
 
   it("adiciona a categoria no novo layout", () => {
@@ -50,9 +49,11 @@ describe("formatCaption", () => {
     expect(caption).not.toContain("\nhttps://www.kabum.com.br/produto/123/ssd");
   });
 
-  it("mostra apenas o desconto validado pelo historico, sem Tavarez Score", () => {
+  it("mostra Tavarez Score sem exibir o historico de preco", () => {
     const caption = formatCaption({
       ...baseDeal,
+      tavarezScore: 88,
+      scoreLabel: "Excelente",
       priceHistory: {
         lowestPrice90Days: 299.9,
         averagePrice30Days: 350,
@@ -63,8 +64,9 @@ describe("formatCaption", () => {
       },
     }, baseDeal.originalUrl);
 
-    expect(caption).toContain("(-14% vs. média recente)");
-    expect(caption).not.toContain("Tavarez Score");
+    expect(caption).toContain("Tavarez Score: <b>88/100 — Excelente</b>");
+    expect(caption).not.toContain("abaixo da média");
+    expect(caption).not.toContain("Menor preço");
   });
 
   it("mostra cupom em formato copiavel e classifica celular", () => {
