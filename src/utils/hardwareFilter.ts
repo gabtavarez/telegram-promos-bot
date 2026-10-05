@@ -43,6 +43,7 @@ const BLOCKED_TERMS = [
   /\b(tablet|ipad|impressora|webcam|roteador)\b/i,
   /\b(capa|capinha|pel[ií]cula|case|carteira|suporte|tela|display|lente|bateria)\s+(?:para\s+)?(?:celular|smartphone|iphone|galaxy)\b/i,
   /^(?=.*\b(?:capa|capinha|pel[ií]cula|silicone|tpu|magsafe|mag\s*safe|phone\s*case|case\s*cover)\b)(?=.*\b(?:iphone|galaxy|samsung|celular|smartphone|telefone|a\d{2}|s\d{2})\b).*$/i,
+  /^(?=.*\b(?:embalagem|cobertura|carca[cç]a|protetor(?:a)?|bumper)\b)(?=.*\b(?:para\s+)?(?:iphone|galaxy|samsung|celular|smartphone|telefone|a\d{2}|s\d{2})\b).*$/i,
   /\b(liquidificador|suco|smoothie|mosquito|inseto|insetos|praga|pragas|fly\s+bug|lampada|l[aâ]mpada|led\s+luz|armadilha|assassino\s+de\s+insetos)\b/i,
   /\b(l[aâ]mina|reparo\s+de\s+celular|cola\s+uv|solda|ferro\s+de\s+solda|ferramenta(?:s)?\s+de\s+reparo|telefone\s+desmontar)\b/i,
   /\b(filtro\s+de\s+poeira|dust\s+filter|mesh\s+shield|tela\s+de\s+poeira)\b/i,

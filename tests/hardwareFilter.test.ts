@@ -62,6 +62,7 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Apple iPhone 11 64GB")).toBe(false);
     expect(isPcHardwareDeal("Capa para iPhone 16 Pro Max")).toBe(false);
     expect(isPcHardwareDeal("Capa Para Ins Amor Silicone Macio TPU Samsung Galaxy A55 A54 A53 A52s A52 A35 A34 A16 A15 A14 5G 4G A06 A05 Telefone")).toBe(false);
+    expect(isPcHardwareDeal("YBD Embalagem Para Samsung Galaxy A56 A36 A26 A34 A35 A54 A55 A24 A25 A37 A57 A27 5G Dourado Borboleta Urso Galvanoplast")).toBe(false);
     expect(isPcHardwareDeal("Hagibis 2230 M.2 NVMe SSD Gabinete USB 3.2 Gen 2 para PCI-E M.2 SSD Case 2242 SSD externo Disquete para iPhone 17 Pro Laptops")).toBe(false);
     expect(isPcHardwareDeal("Case externo para SSD M.2 NVMe USB-C 10Gbps")).toBe(false);
     expect(isPcHardwareDeal("Turzx 2.1 Polegada ips tela secundaria usb tipo-c 480x480 display redondo para refrigerador de agua pc cpu gpu ram hdd monitor com caso cnc")).toBe(false);
