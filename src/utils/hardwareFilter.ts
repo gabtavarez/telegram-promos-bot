@@ -28,7 +28,7 @@ const HARDWARE_TERMS = [
   QUALITY_PHONE_TERM,
 
   // Organizacao e estetica de setup
-  /\b(bra[cç]o\s+articulado|suporte\s+articulado\s+para\s+monitor|pegboard|painel\s+perfurado)\b/i,
+  /\b(bra[cç]o\s+articulado|suporte\s+(?:(?:articulado|de\s+mesa)\s+)?para\s+monitor|monitor\s+arm|pegboard|painel\s+perfurado)\b/i,
   /\b(suporte\s+para\s+(?:headset|notebook)|cabo(?:s)?\s+extensor(?:es)?\s+sleeved|sleeved\s+(?:24-?pin|8-?pin|argb))\b/i,
   /\b(fan(?:s)?\s+argb|water\s*cooler|air\s*cooler|pasta\s+t[eé]rmica)\b/i,
   /\b(hub\s+usb|dock\s+station|organizador(?:es)?\s+de\s+cabos|lumin[aá]ria\s+de\s+mesa|barra\s+de\s+luz\s+para\s+monitor|screenbar)\b/i,
@@ -80,6 +80,7 @@ const TRUSTED_BRANDS = [
   /\b(kingston|corsair|crucial|samsung|western\s+digital|wd|sandisk|lexar|xpg|adata|teamgroup|team\s+group|seagate)\b/i,
   /\b(cooler\s+master|seasonic|super\s+flower|deepcool|nzxt|thermaltake|montech|lian\s+li|pichau|mancer|aigo)\b/i,
   /\b(logitech|razer|redragon|hyperx|havit|attack\s+shark|delux|ajazz|darmoshark|machenike|fifine|maono|edifier|jbl|anker|baseus)\b/i,
+  /\b(elg|north\s+bayou|f80n?|f100a|h100)\b/i,
   /\b(lg|samsung|aoc|acer|dell|benq|tcl|philips|hisense)\b/i,
   /\b(apple|iphone)\b/i,
 ];
@@ -98,6 +99,8 @@ const QUALITY_SIGNALS = [
   /\b(7\.1|2\.4g(?:hz)?|low\s+latency|surround|usb\s+headset|headset\s+usb|iem)\b/i,
   /\b(mx-?[46]|kryonaut|nt-h[12]|xtm(?:50|70)|mastergel|thermal\s+grizzly)\b/i,
   /\b(bra[cç]o\s+articulado|pegboard|painel\s+perfurado|suporte\s+para\s+(?:headset|notebook)|cabo(?:s)?\s+extensor(?:es)?\s+sleeved)\b/i,
+  /\b(?:vesa\s*(?:75|100)|monitor\s+arm)\b/i,
+  /\b(?:pist[aã]o\s+a\s+g[aá]s|mola\s+a\s+g[aá]s|gas\s+spring|f80n?|f100a|h100)\b/i,
   /\b(ergon[oô]mica|apoio\s+lombar|encosto\s+mesh|bra[cç]o\s+[234]d|ajuste\s+de\s+altura|girat[oó]ria)\b/i,
   /\b(iphone\s+(?:13|14|15|16|17)|galaxy\s+(?:s(?:23|24|25|26)|z\s*(?:flip|fold)\s*[5-8]|a(?:35|36|55|56)|m(?:55|56))|5g|(?:128|256|512)gb)\b/i,
 ];

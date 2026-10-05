@@ -18,6 +18,8 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Televisor LG OLED 55 polegadas 4K")).toBe(true);
     expect(isPcHardwareDeal("Notebook Vaio Ryzen 7 5825U 16GB RAM 512GB SSD Wi-Fi 6")).toBe(true);
     expect(isPcHardwareDeal("Braco articulado para monitor")).toBe(true);
+    expect(getHardwareQualityScore("Braço articulado para monitor VESA 100 pistão a gás")).toBeGreaterThanOrEqual(6);
+    expect(getHardwareQualityScore("Monitor arm VESA 100 gas spring para mesa")).toBeGreaterThanOrEqual(6);
     expect(isPcHardwareDeal("Fans ARGB 120mm para gabinete")).toBe(true);
     expect(isPcHardwareDeal("Luminaria de mesa ScreenBar para monitor")).toBe(true);
     expect(isPcHardwareDeal("Cadeira Ergonômica de Escritório Giratória com Encosto Mesh e Apoio Lombar")).toBe(true);

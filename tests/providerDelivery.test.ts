@@ -409,7 +409,7 @@ describe("provider delivery checks", () => {
     expect(queriedKeywords).not.toContain("SSD NVMe");
     expect(queriedKeywords).not.toContain("graphics card");
     expect(queriedKeywords.every((keyword) =>
-      /keyboard|mouse|ram|headset|earphone|water cooler|pc fan/i.test(keyword),
+      /keyboard|mouse|ram|headset|earphone|water cooler|pc fan|monitor arm/i.test(keyword),
     )).toBe(true);
   });
 
@@ -421,6 +421,7 @@ describe("provider delivery checks", () => {
       "Gaming headset HyperX USB",
       "Water Cooler Deepcool 360mm ARGB",
       "Kit 3 fans ARGB Cooler Master 120mm",
+      "Monitor arm gas spring VESA 100 para mesa",
     ].every(isAliExpressFocusProduct)).toBe(true);
 
     expect(isAliExpressFocusProduct("SSD NVMe Kingston 1TB M.2 PCIe 4.0")).toBe(false);

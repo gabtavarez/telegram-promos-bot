@@ -30,6 +30,7 @@ const HARDWARE_KEYWORDS = [
   "360mm AIO water cooler ARGB",
   "120mm ARGB PC fan",
   "140mm ARGB PC fan",
+  "monitor arm gas spring VESA",
 ];
 
 interface AliExpressConfig {
@@ -257,7 +258,9 @@ export function isAliExpressFocusProduct(title: string): boolean {
   const audio = /\b(?:headset|fone\s+gamer|gaming\s+(?:headset|headphone|earphone)|iem)\b/.test(normalized);
   const waterCooler = /\b(?:water\s*cooler|watercooler|aio|liquid\s+cooler|refrigeracao\s+liquida)\b/.test(normalized);
   const argbFan = /\b(?:fan|fans|ventoinha|ventoinhas)\b/.test(normalized) && /\bargb\b/.test(normalized);
-  return keyboard || mouse || memory || audio || waterCooler || argbFan;
+  const monitorArm = /\b(?:monitor\s+arm|braco\s+articulado|suporte\s+articulado)\b/.test(normalized) &&
+    /\b(?:vesa|gas\s+spring|mola\s+a\s+gas|pistao\s+a\s+gas)\b/.test(normalized);
+  return keyboard || mouse || memory || audio || waterCooler || argbFan || monitorArm;
 }
 
 function chunk<T>(values: T[], size: number): T[][] {

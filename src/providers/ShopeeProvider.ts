@@ -25,6 +25,8 @@ const HARDWARE_KEYWORDS = [
   "monitor 180hz",
   "cadeira ergonomica escritorio mesh",
   "braco articulado monitor",
+  "suporte monitor pistao gas vesa f80",
+  "suporte duplo monitor articulado vesa",
   "notebook ryzen 16gb ssd",
   "smart tv 4k 50",
   "Samsung Galaxy S24 256GB",
