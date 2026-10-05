@@ -11,6 +11,7 @@ import type { Coupon } from "../coupons/CouponProvider.js";
 import type { FeedbackCounts, FeedbackType, PriceHistoryStats, PublishedOffer, UserAlert } from "../types/BotState.js";
 import { checkDealAvailability, isDealAvailable } from "./DealAvailabilityChecker.js";
 import { enrichDealPayment } from "./DealPaymentEnricher.js";
+import { getVerifiedDiscount, normalizeDealPricing } from "../utils/price.js";
 
 export class DealsJob {
   private running = false;
@@ -240,7 +241,7 @@ export class DealsJob {
     for (const provider of this.providers) {
       try {
         const providerDeals = await provider.getDeals();
-        deals.push(...providerDeals);
+        deals.push(...providerDeals.map(normalizeDealPricing));
         console.log(`${provider.name}: ${providerDeals.length} ofertas encontradas.`);
       } catch (error) {
         console.error(`Falha ao consultar ${provider.name}.`, error);
@@ -445,7 +446,7 @@ export function isPromotableDeal(deal: Deal): boolean {
   if (qualityScore < 6) return false;
 
   if (deal.couponCode && deal.couponVerified && qualityScore >= 6) return true;
-  if ((deal.discountPercentage ?? 0) >= 15) return true;
+  if ((getVerifiedDiscount(deal) ?? 0) >= 15) return true;
 
   if ((deal.priceHistory?.observationDays ?? 0) >= 3) {
     return (deal.priceHistory?.percentBelow30DayAverage ?? 0) >= 10;
@@ -483,7 +484,7 @@ export function getDealSelectionScore(
   recentCategories: string[] = [],
 ): number {
   const quality = Math.max(0, getHardwareQualityScore(deal.title));
-  const discount = Math.min(deal.discountPercentage ?? 0, 60);
+  const discount = Math.min(getVerifiedDiscount(deal) ?? 0, 60);
   const historyBonus = Math.max(0, Math.min(deal.priceHistory?.percentBelow30DayAverage ?? 0, 20));
   const couponBonus = deal.couponCode && deal.couponVerified ? 8 : 0;
   const providerBonus = deal.provider === "kabum" ? 14 : 0;

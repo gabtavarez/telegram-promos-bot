@@ -31,7 +31,6 @@ export function extractPaymentDetails(text?: string | null): PaymentDetails {
     const installmentValue = parseBrlPrice(installmentMatch[2]);
     if (installments > 0 && installmentValue) {
       installmentText = `em até ${installments}x de ${formatCurrency(installmentValue)}`;
-      if (!cardPrice) cardPrice = roundPrice(installments * installmentValue);
     }
   }
 
@@ -40,8 +39,4 @@ export function extractPaymentDetails(text?: string | null): PaymentDetails {
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-}
-
-function roundPrice(value: number): number {
-  return Math.round(value * 100) / 100;
 }

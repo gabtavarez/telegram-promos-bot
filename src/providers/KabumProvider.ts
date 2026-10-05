@@ -2,7 +2,7 @@ import { gunzipSync } from "node:zlib";
 import axios, { type AxiosInstance } from "axios";
 import type { Deal } from "../types/Deal.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
-import { calculateDiscount } from "../utils/price.js";
+import { calculateDiscount, parseBrlPrice } from "../utils/price.js";
 import { extractPaymentDetails } from "../utils/payment.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
@@ -208,15 +208,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseFeedPrice(value?: string | number): number | undefined {
-  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : undefined;
-  if (!value) return undefined;
-  const match = value.match(/[\d.,]+/u)?.[0];
-  if (!match) return undefined;
-  const normalized = match.includes(",") && match.includes(".")
-    ? match.replace(/\./g, "").replace(",", ".")
-    : match.replace(",", ".");
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  return value === undefined ? undefined : parseBrlPrice(String(value));
 }
 
 function parseCsvFeed(data: string): AwinFeedRecord[] {

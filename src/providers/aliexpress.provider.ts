@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import axios, { type AxiosInstance } from "axios";
 import type { Deal } from "../types/Deal.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
-import { calculateDiscount } from "../utils/price.js";
+import { calculateDiscount, parseBrlPrice } from "../utils/price.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
 const API_URL = "https://api-sg.aliexpress.com/sync";
@@ -13,7 +13,6 @@ const PRODUCT_FIELDS = [
   "product_main_image_url",
   "target_sale_price",
   "target_original_price",
-  "discount",
   "promotion_link",
 ].join(",");
 const HARDWARE_KEYWORDS = [
@@ -46,7 +45,6 @@ interface AliExpressProduct {
   product_main_image_url?: string;
   target_sale_price?: string;
   target_original_price?: string;
-  discount?: string;
   promotion_link?: string;
 }
 
@@ -148,7 +146,7 @@ export class AliExpressProvider implements AffiliateProvider {
           imageUrl,
           currentPrice,
           previousPrice: originalPrice,
-          discountPercentage: parseDiscount(product.discount) ?? calculateDiscount(currentPrice, originalPrice),
+          discountPercentage: calculateDiscount(currentPrice, originalPrice),
         }];
       });
     } catch (error) {
@@ -322,13 +320,5 @@ function normalizeAffiliateLink(link?: string): string | undefined {
 }
 
 function parsePrice(value?: string): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number(value.replace(/[^\d.,-]/g, "").replace(",", "."));
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function parseDiscount(value?: string): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number.parseFloat(value.replace("%", ""));
-  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : undefined;
+  return parseBrlPrice(value);
 }

@@ -6,6 +6,7 @@ import type {
   PublishedOffer,
   PublishedOfferStatus,
 } from "../types/BotState.js";
+import { getVerifiedDiscount } from "../utils/price.js";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -86,7 +87,8 @@ export function formatCaption(
   affiliateUrl: string,
   status: PublishedOfferStatus = "active",
 ): string {
-  const discount = deal.discountPercentage ? ` (-${deal.discountPercentage}%)` : "";
+  const verifiedDiscount = getVerifiedDiscount(deal);
+  const discount = verifiedDiscount ? ` (-${verifiedDiscount}%)` : "";
   const primaryPrice = deal.pixPrice
     ? `🔥 <b>${currency.format(deal.pixPrice)} no Pix${discount}</b>`
     : `🔥 <b>${currency.format(deal.currentPrice)}${discount}</b>`;

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import axios, { type AxiosInstance } from "axios";
 import type { Deal } from "../types/Deal.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
+import { parseBrlPrice } from "../utils/price.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
 const API_URL = "https://open-api.affiliate.shopee.com.br/graphql";
@@ -50,7 +51,6 @@ const productQuery = (keyword: string) => `{
       priceMin
       priceMax
       ratingStar
-      priceDiscountRate
       shopId
     }
     pageInfo { page limit hasNextPage scrollId }
@@ -72,7 +72,6 @@ interface ShopeeProduct {
   priceMin?: string | number;
   priceMax?: string | number;
   ratingStar?: string | number;
-  priceDiscountRate?: string | number;
   shopId?: string | number;
 }
 
@@ -121,10 +120,6 @@ export class ShopeeProvider implements AffiliateProvider {
         const currentPrice = directPrice ?? minimumPrice;
         const imageUrl = normalizeUrl(product.imageUrl);
         const originalUrl = normalizeShopeeUrl(product.offerLink) ?? normalizeShopeeUrl(product.productLink);
-        const discountPercentage = parseDiscount(product.priceDiscountRate);
-        const previousPrice = currentPrice && discountPercentage
-          ? roundPrice(currentPrice / (1 - discountPercentage / 100))
-          : undefined;
 
         if (!id || !title || !currentPrice || !imageUrl || !originalUrl || hasMisleadingVariantRange) return [];
         const rating = parseRating(product.ratingStar);
@@ -138,8 +133,6 @@ export class ShopeeProvider implements AffiliateProvider {
           originalUrl,
           imageUrl,
           currentPrice,
-          previousPrice,
-          discountPercentage,
         }];
       });
 
@@ -176,22 +169,7 @@ export class ShopeeProvider implements AffiliateProvider {
 }
 
 function parsePrice(value?: string | number): number | undefined {
-  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : undefined;
-  if (!value) return undefined;
-  const cleaned = value.replace(/[^\d.,-]/g, "");
-  const normalized = cleaned.includes(",") && cleaned.includes(".")
-    ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned.replace(",", ".");
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function parseDiscount(value?: string | number): number | undefined {
-  if (value === undefined) return undefined;
-  const parsed = typeof value === "number" ? value : Number.parseFloat(value.replace("%", ""));
-  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
-  const percentage = parsed <= 1 ? parsed * 100 : parsed;
-  return Math.min(99, Math.round(percentage));
+  return value === undefined ? undefined : parseBrlPrice(String(value));
 }
 
 function parseRating(value?: string | number): number | undefined {
@@ -240,8 +218,4 @@ function normalizeShopeeUrl(value?: string): string | undefined {
   return hostname === "shopee.com.br" || hostname.endsWith(".shopee.com.br") || hostname === "shope.ee"
     ? normalized
     : undefined;
-}
-
-function roundPrice(value: number): number {
-  return Math.round(value * 100) / 100;
 }

@@ -13,7 +13,7 @@ const baseDeal: Deal = {
 
 describe("formatCaption", () => {
   it("coloca preco/desconto no topo e produto em destaque abaixo", () => {
-    const caption = formatCaption({ ...baseDeal, discountPercentage: 31 }, baseDeal.originalUrl);
+    const caption = formatCaption({ ...baseDeal, previousPrice: 434.64, discountPercentage: 31 }, baseDeal.originalUrl);
 
     expect(caption).toContain("🔥 <b>R$ 299,90 (-31%)</b>\n\n<b>SSD NVMe 1 TB</b>");
   });
@@ -110,6 +110,7 @@ describe("formatCaption", () => {
       pixPrice: 779,
       cardPrice: 849,
       installmentText: "em até 10x de R$ 84,90",
+      previousPrice: 1025,
       discountPercentage: 24,
     }, baseDeal.originalUrl);
 
@@ -121,5 +122,17 @@ describe("formatCaption", () => {
     const caption = formatCaption(baseDeal, baseDeal.originalUrl);
     expect(caption).not.toContain("no Pix");
     expect(caption).not.toContain("💳");
+  });
+
+  it("nunca exibe percentual isolado ou desconto absurdo", () => {
+    const caption = formatCaption({
+      ...baseDeal,
+      currentPrice: 1449,
+      previousPrice: 144900,
+      discountPercentage: 99,
+    }, baseDeal.originalUrl);
+
+    expect(caption).toContain("R$ 1.449,00");
+    expect(caption).not.toContain("99%");
   });
 });

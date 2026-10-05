@@ -302,8 +302,9 @@ describe("provider delivery checks", () => {
       provider: "shopee",
       originalUrl: "https://s.shopee.com.br/abc123",
       currentPrice: 699.9,
-      discountPercentage: 30,
     });
+    expect(deals[0]?.discountPercentage).toBeUndefined();
+    expect(deals[0]?.previousPrice).toBeUndefined();
     expect(axiosMocks.post.mock.calls[0]?.[2]?.headers.Authorization).toMatch(
       /^SHA256 Credential=app-id, Timestamp=\d+, Signature=[a-f0-9]{64}$/,
     );

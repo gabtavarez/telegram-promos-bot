@@ -1,5 +1,6 @@
 import type { Deal } from "../types/Deal.js";
 import { extractPaymentDetails } from "../utils/payment.js";
+import { calculateDiscount, normalizeDealPricing } from "../utils/price.js";
 import { fetchDealPage } from "./DealAvailabilityChecker.js";
 
 /** Atualiza apenas o finalista, evitando uma requisicao extra para cada item do catalogo. */
@@ -11,13 +12,14 @@ export async function enrichDealPayment(deal: Deal): Promise<Deal> {
     const payment = extractPaymentDetails(page);
     if (!isPlausiblePixPrice(payment.pixPrice, deal.currentPrice)) return deal;
 
-    return {
+    return normalizeDealPricing({
       ...deal,
       currentPrice: payment.pixPrice!,
       pixPrice: payment.pixPrice,
-      cardPrice: payment.cardPrice ?? deal.currentPrice,
+      cardPrice: deal.currentPrice,
       installmentText: payment.installmentText,
-    };
+      discountPercentage: calculateDiscount(payment.pixPrice!, deal.previousPrice),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`Nao foi possivel confirmar o preco Pix de "${deal.title}": ${message}`);

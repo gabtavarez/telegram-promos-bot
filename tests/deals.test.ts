@@ -19,8 +19,8 @@ const base: Deal = {
 describe("deal selection", () => {
   it("prefers the greatest discount", () => {
     const best = selectBestDeal([
-      { ...base, id: "1", discountPercentage: 10 },
-      { ...base, id: "2", discountPercentage: 30, currentPrice: 200 },
+      { ...base, id: "1", previousPrice: 111.11, discountPercentage: 10 },
+      { ...base, id: "2", previousPrice: 285.71, discountPercentage: 30, currentPrice: 200 },
     ]);
     expect(best?.id).toBe("2");
   });
@@ -36,12 +36,13 @@ describe("deal selection", () => {
     const qualityDeal = {
       ...base,
       title: "SSD NVMe Kingston 1TB M.2 PCIe 4.0",
+      previousPrice: 125,
       discountPercentage: 20,
     };
 
     expect(isPromotableDeal(qualityDeal)).toBe(true);
-    expect(isPromotableDeal({ ...qualityDeal, discountPercentage: 10 })).toBe(false);
-    expect(isPromotableDeal({ ...qualityDeal, title: "SSD 128GB generico", discountPercentage: 70 })).toBe(false);
+    expect(isPromotableDeal({ ...qualityDeal, previousPrice: 111.11, discountPercentage: 10 })).toBe(false);
+    expect(isPromotableDeal({ ...qualityDeal, title: "SSD 128GB generico", previousPrice: 333.33, discountPercentage: 70 })).toBe(false);
   });
 
   it("nao aceita produto sem evidencia de promocao apenas pelo nome", () => {
@@ -54,6 +55,18 @@ describe("deal selection", () => {
       ...base,
       title: "Memoria Kingston 16GB DDR4",
       discountPercentage: undefined,
+    })).toBe(false);
+  });
+
+  it("nao aceita percentual sem preco anterior nem desconto absurdo", () => {
+    const title = "Processador AMD Ryzen 5 5600GT 6-Core AM4 BOX";
+    expect(isPromotableDeal({ ...base, title, currentPrice: 1449, discountPercentage: 99 })).toBe(false);
+    expect(isPromotableDeal({
+      ...base,
+      title,
+      currentPrice: 1449,
+      previousPrice: 144900,
+      discountPercentage: 99,
     })).toBe(false);
   });
 
@@ -81,12 +94,14 @@ describe("deal selection", () => {
       ...base,
       id: "water",
       title: "Water Cooler Rise Mode 240mm LCD Display Tela ARGB",
+      previousPrice: 133.33,
       discountPercentage: 25,
     };
     const airCooler = {
       ...base,
       id: "air",
       title: "Deepcool AG400 Air Cooler CPU ARGB 220W",
+      previousPrice: 133.33,
       discountPercentage: 25,
     };
 
@@ -112,8 +127,8 @@ describe("deal selection", () => {
 
   it("favorece outra loja quando as ofertas sao comparaveis", () => {
     const title = "SSD NVMe Kingston 1TB M.2 PCIe 4.0";
-    const sameStore = { ...base, id: "same", provider: "shopee" as const, title, discountPercentage: 30 };
-    const otherStore = { ...base, id: "other", provider: "kabum" as const, title, discountPercentage: 25 };
+    const sameStore = { ...base, id: "same", provider: "shopee" as const, title, previousPrice: 142.86, discountPercentage: 30 };
+    const otherStore = { ...base, id: "other", provider: "kabum" as const, title, previousPrice: 133.33, discountPercentage: 25 };
 
     expect(getDealSelectionScore(otherStore, ["shopee"])).toBeGreaterThan(
       getDealSelectionScore(sameStore, ["shopee"]),
@@ -122,8 +137,8 @@ describe("deal selection", () => {
   });
 
   it("penaliza repeticao recente da mesma categoria", () => {
-    const gpu = { ...base, id: "gpu", title: "Placa de video RTX 4060 8GB", discountPercentage: 25 };
-    const monitor = { ...base, id: "monitor", title: "Monitor Gamer LG 180Hz IPS", discountPercentage: 25 };
+    const gpu = { ...base, id: "gpu", title: "Placa de video RTX 4060 8GB", previousPrice: 133.33, discountPercentage: 25 };
+    const monitor = { ...base, id: "monitor", title: "Monitor Gamer LG 180Hz IPS", previousPrice: 133.33, discountPercentage: 25 };
 
     expect(getDealSelectionScore(monitor, [], ["gpu"]))
       .toBeGreaterThan(getDealSelectionScore(gpu, [], ["gpu"]));
