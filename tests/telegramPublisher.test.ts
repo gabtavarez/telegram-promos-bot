@@ -112,6 +112,26 @@ describe("formatCaption", () => {
     expect(caption).toContain(baseDeal.originalUrl);
   });
 
+  it("separa as categorias de refrigeracao antes de CPU", () => {
+    const waterCooler = {
+      ...baseDeal,
+      title: "Jonsbo TM-360 AIO Liquid CPU Cooler 360mm ARGB para AM5",
+    };
+    const airCooler = {
+      ...baseDeal,
+      title: "Deepcool AG400 Air Cooler CPU ARGB 220W",
+    };
+    const fans = {
+      ...baseDeal,
+      title: "Kit 3 Fans ARGB 120mm para PC",
+    };
+
+    expect(formatCaption(waterCooler, waterCooler.originalUrl)).toContain("#WaterCooler");
+    expect(formatCaption(waterCooler, waterCooler.originalUrl)).not.toContain("#CPU");
+    expect(formatCaption(airCooler, airCooler.originalUrl)).toContain("#AirCooler");
+    expect(formatCaption(fans, fans.originalUrl)).toContain("#Fans");
+  });
+
   it("destaca Pix e mostra o parcelamento quando a loja os informa", () => {
     const caption = formatCaption({
       ...baseDeal,
