@@ -20,6 +20,12 @@ describe("formatCaption", () => {
 
   it("adiciona a categoria no novo layout", () => {
     expect(formatCaption(baseDeal, baseDeal.originalUrl)).toContain("#Armazenamento");
+    expect(formatCaption({ ...baseDeal, title: "Processador AMD Ryzen 7 7800X3D" }, baseDeal.originalUrl))
+      .toContain("#Processador");
+    expect(formatCaption({ ...baseDeal, title: "Placa de Video RTX 4070 Super" }, baseDeal.originalUrl))
+      .toContain("#PlacaDeVideo");
+    expect(formatCaption({ ...baseDeal, title: "Memoria RAM DDR5 Kingston 32GB" }, baseDeal.originalUrl))
+      .toContain("#MemoriaRam");
   });
 
   it("substitui Anuncio pela hashtag da loja", () => {
@@ -32,13 +38,12 @@ describe("formatCaption", () => {
   });
 
   it("prioriza a categoria do equipamento sobre seus componentes", () => {
-    const notebook = { ...baseDeal, title: "Notebook Vaio Ryzen 7 16GB RAM SSD" };
+    const notebook = { ...baseDeal, title: "Notebook Gamer Acer Nitro RTX 4050 16GB RAM SSD" };
     const tablet = { ...baseDeal, title: "Positivo Vision TAB10 4GB RAM 128GB SSD" };
 
     expect(formatCaption(notebook, notebook.originalUrl)).toContain("#Notebook");
-    expect(formatCaption(notebook, notebook.originalUrl)).not.toContain("#CPU");
-    expect(formatCaption(tablet, tablet.originalUrl)).toContain("#Tablet");
-    expect(formatCaption(tablet, tablet.originalUrl)).not.toContain("#RAM");
+    expect(formatCaption(notebook, notebook.originalUrl)).not.toContain("#Processador");
+    expect(formatCaption(tablet, tablet.originalUrl)).not.toContain("#Tablet");
   });
 
   it("classifica televisores premium como TV", () => {
@@ -103,7 +108,7 @@ describe("formatCaption", () => {
     }, baseDeal.originalUrl);
 
     expect(caption).toContain("#Setup");
-    expect(caption).not.toContain("#GPU");
+    expect(caption).not.toContain("#PlacaDeVideo");
   });
 
   it("mantem o link da oferta visivel sem depender de botao", () => {
@@ -127,7 +132,7 @@ describe("formatCaption", () => {
     };
 
     expect(formatCaption(waterCooler, waterCooler.originalUrl)).toContain("#WaterCooler");
-    expect(formatCaption(waterCooler, waterCooler.originalUrl)).not.toContain("#CPU");
+    expect(formatCaption(waterCooler, waterCooler.originalUrl)).not.toContain("#Processador");
     expect(formatCaption(airCooler, airCooler.originalUrl)).toContain("#AirCooler");
     expect(formatCaption(fans, fans.originalUrl)).toContain("#Fans");
   });

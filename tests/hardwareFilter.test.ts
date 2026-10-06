@@ -16,7 +16,10 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("Monitor gamer ultrawide 165Hz")).toBe(true);
     expect(isPcHardwareDeal("Smart TV Samsung 50 polegadas Crystal UHD 4K")).toBe(true);
     expect(isPcHardwareDeal("Televisor LG OLED 55 polegadas 4K")).toBe(true);
-    expect(isPcHardwareDeal("Notebook Vaio Ryzen 7 5825U 16GB RAM 512GB SSD Wi-Fi 6")).toBe(true);
+    expect(isPcHardwareDeal("Notebook Gamer Acer Nitro V15 RTX 4050 Core i7 16GB RAM SSD 512GB")).toBe(true);
+    expect(isPcHardwareDeal("Notebook Gamer Lenovo LOQ RTX 4060 Ryzen 7 16GB RAM SSD 1TB")).toBe(true);
+    expect(isPcHardwareDeal("Apple MacBook Air M2 8GB 256GB SSD")).toBe(true);
+    expect(isPcHardwareDeal("MacBook Pro Apple M4 Pro 24GB 512GB SSD")).toBe(true);
     expect(isPcHardwareDeal("Braco articulado para monitor")).toBe(true);
     expect(getHardwareQualityScore("Braço articulado para monitor VESA 100 pistão a gás")).toBeGreaterThanOrEqual(6);
     expect(getHardwareQualityScore("Monitor arm VESA 100 gas spring para mesa")).toBeGreaterThanOrEqual(6);
@@ -57,6 +60,9 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("4010 12025 8010 30mm DC 5V 12V Cooling Fan Brushless Motor Case Quiet 2PIN")).toBe(false);
     expect(isPcHardwareDeal("Placa de video GT 710 2GB DDR3 HDMI")).toBe(false);
     expect(isPcHardwareDeal("Notebook Intel Celeron 4GB RAM 128GB eMMC")).toBe(false);
+    expect(isPcHardwareDeal("Notebook Vaio Ryzen 7 5825U 16GB RAM 512GB SSD Wi-Fi 6")).toBe(false);
+    expect(isPcHardwareDeal("Notebook Acer Aspire 5 Core i7 16GB RAM SSD 512GB")).toBe(false);
+    expect(isPcHardwareDeal("MacBook Pro Intel Core i5 8GB 256GB SSD")).toBe(false);
     expect(isPcHardwareDeal("Fonte ATX 300W Real Bivolt Chaveada")).toBe(false);
     expect(isPcHardwareDeal("Mouse sem fio escritorio silencioso")).toBe(false);
     expect(isPcHardwareDeal("Fone gamer RGB generico")).toBe(false);

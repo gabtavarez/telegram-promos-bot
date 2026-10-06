@@ -4,6 +4,13 @@ const QUALITY_TV_TERM =
 const QUALITY_PHONE_TERM =
   /\b(?:(?:apple\s+)?iphone\s+(?:13|14|15|16|17)(?:\s*(?:mini|plus|pro|max|air|e))*|samsung\s+galaxy\s+(?:s(?:23|24|25|26)(?:\s*(?:fe|plus|ultra)|\+)?|z\s*(?:flip|fold)\s*[5-8]|a(?:35|36|55|56)|m(?:55|56)))\b/i;
 
+const GAMING_NOTEBOOK_LINE =
+  /\b(?:acer\s+nitro|lenovo\s+(?:loq|legion)|dell\s+g1[56]|alienware|asus\s+(?:tuf|rog)|hp\s+(?:victus|omen)|msi\s+(?:katana|cyborg|stealth|raider|sword|thin)|gigabyte\s+(?:g5|aorus)|avell)\b/i;
+const GAMING_NOTEBOOK_GPU =
+  /\b(?:rtx\s*(?:30[5-9]0|40[5-9]0|50[5-9]0)(?:\s*ti)?|rx\s*(?:6[6-9]\d{2}|7[6-9]\d{2})[ms]?)\b/i;
+const APPLE_SILICON_MACBOOK =
+  /^(?=.*\bmacbook\s+(?:air|pro)\b)(?=.*\b(?:apple\s+)?m[1-4](?:\s+(?:pro|max|ultra))?\b).*$/i;
+
 const HARDWARE_TERMS = [
   // Hardware principal
   /\b(gpu|vga)\b/i,
@@ -15,6 +22,7 @@ const HARDWARE_TERMS = [
   /\b(placa-m[aã]e|placa\s+m[aã]e|motherboard|b450|b550|b650|x570|x670|a520|h510|h610|h710|b760|z690|z790)\b/i,
   /\b(psu|80\s?plus|fonte\s+(?:atx|sfx|flex-atx|flex\s+atx|gamer|pc|computador)|fonte\s+\d{3,4}w|atx\s+\d{3,4}w|\d{3,4}w\s+atx|sfx\s+\d{3,4}w)\b/i,
   /\b(gabinete|case\s+gamer|mid\s+tower|full\s+tower|mini\s+tower|aqu[aá]rio|sff|mini-itx|mini\s+itx)\b/i,
+  /\bmacbook\s+(?:air|pro)\b/i,
 
   // Perifericos
   /\b(mouse\s+(?:gamer|gaming)|gaming\s+mouse|mousepad|teclado\s+(?:mec[aâ]nico|magn[eé]tico|hall\s*effect|60\s*%|68\s*%|75\s*%|100\s*%|tkl|gamer)|mechanical\s+keyboard|magnetic\s+keyboard|headset|gaming\s+(?:headset|headphone|earphone)|fone\s+gamer|iem|microfone\s+condenser)(?=\s|$|[,:;()\-])/i,
@@ -103,6 +111,7 @@ const QUALITY_SIGNALS = [
   /\b(?:pist[aã]o\s+a\s+g[aá]s|mola\s+a\s+g[aá]s|gas\s+spring|f80n?|f100a|h100)\b/i,
   /\b(ergon[oô]mica|apoio\s+lombar|encosto\s+mesh|bra[cç]o\s+[234]d|ajuste\s+de\s+altura|girat[oó]ria)\b/i,
   /\b(iphone\s+(?:13|14|15|16|17)|galaxy\s+(?:s(?:23|24|25|26)|z\s*(?:flip|fold)\s*[5-8]|a(?:35|36|55|56)|m(?:55|56))|5g|(?:128|256|512)gb)\b/i,
+  /\b(?:apple\s+)?m[1-4](?:\s+(?:pro|max|ultra))?\b/i,
 ];
 
 export function isPcHardwareDeal(title: string): boolean {
@@ -129,11 +138,12 @@ export function getHardwareQualityScore(title: string): number {
 }
 
 function isNotebook(title: string): boolean {
-  return /\b(notebook|laptop)\b/i.test(title);
+  return /\b(notebook|laptop|ultrabook|macbook)\b/i.test(title);
 }
 
 function isQualityNotebook(title: string): boolean {
-  return /(?=.*\b(?:ryzen\s+[3579]|i[3579]\s*-\s*(?:1[1-9]|2\d)\d{3}|core\s+i[3579]|core\s+ultra)\b)(?=.*\b(?:8|12|16|24|32|64)gb\s+ram\b)(?=.*\bssd\b).*$/i.test(title);
+  return APPLE_SILICON_MACBOOK.test(title) ||
+    (GAMING_NOTEBOOK_LINE.test(title) && GAMING_NOTEBOOK_GPU.test(title));
 }
 
 function isTv(title: string): boolean {
