@@ -45,6 +45,7 @@ const HARDWARE_TERMS = [
 const BLOCKED_TERMS = [
   /\bmancer\b/i,
   /\bmetalfish\b/i,
+  /\bsoyo\b/i,
   /\b(?:pc|computador|desktop)\s+(?:gamer|completo|montado|pronto)\b/i,
   /\b(?:pc|computador|desktop)\s+(?:amd|intel|ryzen|core\s+i[3579])\b/i,
   /\bkit\s+(?:pc|computador)\s+(?:gamer|completo|montado)\b/i,
@@ -75,7 +76,7 @@ const LOW_QUALITY_TERMS = [
   /\b(ddr2|ddr3|2gb\s+ram|4gb\s+ram|emmc|hd\s+320gb|hd\s+500gb)\b/i,
   /\b(ssd\s+(?:16|32|64|120|128)gb|(?:16|32|64|120|128)gb\s+ssd)\b/i,
   /\b(fonte\s+real|fonte\s+gamer\s+real|bivolt\s+chaveada|fonte\s+atx\s+(?:200|230|250|300|350)w)\b/i,
-  /\b(kit\s+x99|kit\s+x79|placa\s+x99|placa\s+x79|recondicionado|refurbished|usad[ao]|minera[cç][aã]o)\b/i,
+  /\b(x99|x79|x58|xeon\s+e5(?:-|\s)?\d{4}\s*v?[1-4]?|recondicionado|refurbished|usad[ao]|minera[cç][aã]o)\b/i,
   /\b(4010|4020|3010|30mm|40mm|50mm|60mm|70mm|2\s*pin|brushless\s+motor|3d\s*print)\b/i,
   /\b(fan\s+(?:dc|5v|12v|24v)|cooling\s+fan|ventoinha\s+(?:dc|5v|12v|24v))\b/i,
   /\b(mouse\s+(?:sem\s+fio\s+)?(?:office|escrit[oó]rio|silencioso)|teclado\s+membrana|kit\s+teclado\s+e\s+mouse)\b/i,

@@ -92,6 +92,16 @@ describe("formatCaption", () => {
     expect(caption).toContain("#Celular");
   });
 
+  it("separa iPhone e MacBook das categorias genericas", () => {
+    const iphone = { ...baseDeal, title: "Apple iPhone 16 128GB 5G" };
+    const macbook = { ...baseDeal, title: "Apple MacBook Air M3 16GB 512GB SSD" };
+
+    expect(formatCaption(iphone, iphone.originalUrl)).toContain("#iPhone");
+    expect(formatCaption(iphone, iphone.originalUrl)).not.toContain("#Celular");
+    expect(formatCaption(macbook, macbook.originalUrl)).toContain("#MacBook");
+    expect(formatCaption(macbook, macbook.originalUrl)).not.toContain("#Notebook");
+  });
+
   it("nao classifica acessorio para iPhone como celular", () => {
     const caption = formatCaption({
       ...baseDeal,

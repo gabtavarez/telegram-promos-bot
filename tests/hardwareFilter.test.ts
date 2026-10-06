@@ -36,6 +36,8 @@ describe("hardware filter", () => {
     expect(isPcHardwareDeal("PC Gamer Ryzen 5 5600G 16GB RAM SSD NVMe 1TB")).toBe(false);
     expect(isPcHardwareDeal("Computador completo Intel Core i5 16GB SSD 512GB")).toBe(false);
     expect(isPcHardwareDeal("Desktop montado Ryzen 7 5700G 32GB DDR4")).toBe(false);
+    expect(isPcHardwareDeal("Placa-Mãe SOYO X99 com CPU Xeon E5 2630 V4 LGA2011-3 8GB DDR4")).toBe(false);
+    expect(isPcHardwareDeal("Kit placa mae X99 Xeon E5 2670 V3 16GB DDR4")).toBe(false);
   });
 
   it("keeps quality standalone cases", () => {
