@@ -22,6 +22,15 @@ describe("formatCaption", () => {
     expect(formatCaption(baseDeal, baseDeal.originalUrl)).toContain("#Armazenamento");
   });
 
+  it("substitui Anuncio pela hashtag da loja", () => {
+    expect(formatCaption(baseDeal, baseDeal.originalUrl)).toContain("📢 #MercadoLivre #Armazenamento");
+    expect(formatCaption({ ...baseDeal, provider: "aliexpress" }, baseDeal.originalUrl))
+      .toContain("📢 #AliExpress #Armazenamento");
+    expect(formatCaption({ ...baseDeal, provider: "kabum" }, baseDeal.originalUrl))
+      .toContain("📢 #KaBuM #Armazenamento");
+    expect(formatCaption(baseDeal, baseDeal.originalUrl)).not.toContain("#Anuncio");
+  });
+
   it("prioriza a categoria do equipamento sobre seus componentes", () => {
     const notebook = { ...baseDeal, title: "Notebook Vaio Ryzen 7 16GB RAM SSD" };
     const tablet = { ...baseDeal, title: "Positivo Vision TAB10 4GB RAM 128GB SSD" };

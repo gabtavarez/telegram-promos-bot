@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Bot, InlineKeyboard } from "grammy";
-import type { Deal } from "../types/Deal.js";
+import type { Deal, ProviderName } from "../types/Deal.js";
 import type {
   PublishedMessageType,
   PublishedOffer,
@@ -96,6 +96,7 @@ export function formatCaption(
     ? formatSecondaryPayment(deal)
     : undefined;
   const category = getCategoryHashtag(deal.title);
+  const store = getStoreHashtag(deal.provider);
   const coupon = deal.couponCode ? ["", `🎟️ Cupom: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
   const visibleUrl = affiliateUrl;
   const statusLine = status === "soldout"
@@ -114,7 +115,7 @@ export function formatCaption(
     "",
     ...(status === "soldout" ? [] : ["✅ Link da Oferta:", escapeHtml(visibleUrl)]),
     "",
-    `📢 #Anuncio ${category}`,
+    `📢 ${store} ${category}`,
     status === "soldout"
       ? "ℹ️ Esta publicação foi atualizada automaticamente pelo bot."
       : undefined,
@@ -126,6 +127,17 @@ function formatSecondaryPayment(deal: Deal): string | undefined {
     return `💳 ${currency.format(deal.cardPrice)}${deal.installmentText ? ` — ${deal.installmentText}` : ""}`;
   }
   return deal.installmentText ? `💳 ${deal.installmentText}` : undefined;
+}
+
+export function getStoreHashtag(provider: ProviderName): string {
+  const hashtags: Record<ProviderName, string> = {
+    amazon: "#Amazon",
+    "mercado-livre": "#MercadoLivre",
+    aliexpress: "#AliExpress",
+    kabum: "#KaBuM",
+    shopee: "#Shopee",
+  };
+  return hashtags[provider];
 }
 
 export function getFeedbackKey(dealId: string): string {
