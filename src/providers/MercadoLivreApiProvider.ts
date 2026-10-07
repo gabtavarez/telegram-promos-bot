@@ -26,7 +26,21 @@ interface MercadoLivreItem {
   status?: string;
 }
 
-interface CatalogProduct { buy_box_winner?: { item_id?: string; id?: string }; }
+interface CatalogProduct {
+  id?: string;
+  status?: string;
+  name?: string;
+  permalink?: string;
+  pictures?: Array<{ secure_url?: string; url?: string }>;
+  buy_box_winner?: {
+    item_id?: string;
+    id?: string;
+    price?: number;
+    original_price?: number;
+    available_quantity?: number;
+    condition?: string;
+  };
+}
 interface UserProduct { user_id?: number; item_id?: string; items?: Array<{ id?: string }>; }
 interface ItemSearchResponse { results?: string[]; }
 
@@ -61,13 +75,13 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
       throw new Error(`API de mais vendidos do Mercado Livre nao retornou produtos. ${categoryFailures.join(" | ")}`.trim());
     }
 
+    const resolutionFailures = new Map<string, number>();
     const items = await mapWithConcurrency(unique, 5, async (entry) => {
       try {
-        const itemId = await this.resolveItemId(entry, request);
-        if (!itemId) return undefined;
-        const { data } = await this.client.get<MercadoLivreItem>(`/items/${itemId}`, request);
-        return data;
-      } catch {
+        return await this.resolveEntry(entry, request);
+      } catch (error) {
+        const reason = `${entry.type} ${apiErrorMessage(error)}`;
+        resolutionFailures.set(reason, (resolutionFailures.get(reason) ?? 0) + 1);
         return undefined;
       }
     });
@@ -75,31 +89,52 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
     const deals = items.flatMap((item): Deal[] => item ? toDeal(item) : []);
     if (deals.length === 0) {
       throw new Error(
-        `Mercado Livre retornou ${unique.length} produto(s) populares, mas nenhum detalhe publicavel pôde ser obtido.`,
+        `Mercado Livre retornou ${unique.length} produto(s) populares, mas nenhum detalhe publicavel pôde ser obtido. ` +
+        formatFailureSummary(resolutionFailures),
       );
     }
     return [...new Map(deals.map((deal) => [deal.id, deal])).values()];
   }
 
-  private async resolveItemId(
+  private async resolveEntry(
     entry: HighlightEntry,
     request: { headers: { Authorization: string } },
-  ): Promise<string | undefined> {
-    if (entry.type === "ITEM") return entry.id;
+  ): Promise<MercadoLivreItem | undefined> {
+    if (entry.type === "ITEM") {
+      const { data } = await this.client.get<MercadoLivreItem>(`/items/${entry.id}`, request);
+      return data;
+    }
     if (entry.type === "PRODUCT") {
       const { data } = await this.client.get<CatalogProduct>(`/products/${entry.id}`, request);
-      return data.buy_box_winner?.item_id ?? data.buy_box_winner?.id;
+      const winner = data.buy_box_winner;
+      const image = data.pictures?.[0];
+      if (!winner) return undefined;
+      return {
+        id: winner.item_id ?? winner.id ?? data.id,
+        title: data.name,
+        price: winner.price,
+        original_price: winner.original_price,
+        permalink: data.permalink,
+        secure_thumbnail: image?.secure_url ?? image?.url,
+        available_quantity: winner.available_quantity,
+        condition: winner.condition,
+        status: data.status,
+      };
     }
 
     const { data } = await this.client.get<UserProduct>(`/user-products/${entry.id}`, request);
     const direct = data.item_id ?? data.items?.find((item) => item.id)?.id;
-    if (direct) return direct;
-    if (!data.user_id) return undefined;
-    const search = await this.client.get<ItemSearchResponse>(`/users/${data.user_id}/items/search`, {
-      ...request,
-      params: { user_product_id: entry.id, limit: 1 },
-    });
-    return search.data.results?.[0];
+    let itemId = direct;
+    if (!itemId && data.user_id) {
+      const search = await this.client.get<ItemSearchResponse>(`/users/${data.user_id}/items/search`, {
+        ...request,
+        params: { user_product_id: entry.id, limit: 1 },
+      });
+      itemId = search.data.results?.[0];
+    }
+    if (!itemId) return undefined;
+    const item = await this.client.get<MercadoLivreItem>(`/items/${itemId}`, request);
+    return item.data;
   }
 }
 
@@ -148,6 +183,15 @@ function apiErrorMessage(error: unknown): string {
     return [status ? `HTTP ${status}` : undefined, data?.message ?? data?.error ?? error.message].filter(Boolean).join(" - ");
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatFailureSummary(failures: Map<string, number>): string {
+  if (failures.size === 0) return "Os produtos nao tinham oferta vencedora ou foram bloqueados pelo filtro.";
+  return [...failures.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([reason, count]) => `${count}x ${reason}`)
+    .join(" | ");
 }
 
 function finitePositive(value?: number): number | undefined {
