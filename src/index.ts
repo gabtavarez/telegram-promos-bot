@@ -4,6 +4,7 @@ import { env } from "./config/env.js";
 import type { AffiliateProvider } from "./providers/AffiliateProvider.js";
 import { AmazonProvider } from "./providers/AmazonProvider.js";
 import { MercadoLivreProvider } from "./providers/MercadoLivreProvider.js";
+import { MercadoLivreApiProvider } from "./providers/MercadoLivreApiProvider.js";
 import { AliExpressProvider } from "./providers/aliexpress.provider.js";
 import { KabumProvider } from "./providers/KabumProvider.js";
 import { ShopeeProvider } from "./providers/ShopeeProvider.js";
@@ -17,6 +18,7 @@ import { AwinCouponProvider } from "./coupons/AwinCouponProvider.js";
 import { CompositeCouponProvider } from "./coupons/CompositeCouponProvider.js";
 import { MercadoLivreCouponProvider } from "./coupons/MercadoLivreCouponProvider.js";
 import type { CouponProvider } from "./coupons/CouponProvider.js";
+import { MercadoLivreOAuth } from "./services/MercadoLivreOAuth.js";
 
 async function main(): Promise<void> {
   const store: DealsStore = env.UPSTASH_REDIS_REST_URL
@@ -24,7 +26,26 @@ async function main(): Promise<void> {
     : new PostedDealsStore(env.DATA_FILE);
   await store.initialize();
 
-  const providers: AffiliateProvider[] = [new MercadoLivreProvider(env.ML_DEALS_URL)];
+  const mercadoLivreRedirectUri = env.ML_REDIRECT_URI ?? (env.RENDER_EXTERNAL_URL
+    ? `${env.RENDER_EXTERNAL_URL.replace(/\/$/, "")}/oauth/mercadolivre/callback`
+    : undefined);
+  const mercadoLivreOAuth = env.ML_CLIENT_ID && env.ML_CLIENT_SECRET && mercadoLivreRedirectUri
+    ? new MercadoLivreOAuth({
+        clientId: env.ML_CLIENT_ID,
+        clientSecret: env.ML_CLIENT_SECRET,
+        redirectUri: mercadoLivreRedirectUri,
+        redisUrl: env.UPSTASH_REDIS_REST_URL,
+        redisToken: env.UPSTASH_REDIS_REST_TOKEN,
+      })
+    : undefined;
+  const providers: AffiliateProvider[] = [mercadoLivreOAuth
+    ? new MercadoLivreApiProvider(mercadoLivreOAuth, parseCategoryIds(env.ML_API_CATEGORY_IDS))
+    : new MercadoLivreProvider(env.ML_DEALS_URL)];
+  if (mercadoLivreOAuth) {
+    console.log("API oficial do Mercado Livre configurada. Use /autorizar_meli no chat privado do administrador.");
+  } else {
+    console.warn("API oficial do Mercado Livre desativada; faltam credenciais ou URI de redirect.");
+  }
   if (env.AMAZON_ENABLED) providers.push(new AmazonProvider(env.AMAZON_DEALS_URL));
   if (env.KABUM_ENABLED && (env.KABUM_AWIN_FEED_URL || env.AWIN_ACCESS_TOKEN)) {
     providers.push(
@@ -90,12 +111,17 @@ async function main(): Promise<void> {
     couponProvider,
   );
 
-  new TelegramAdminBot(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_ADMIN_USER_ID ?? "", job).start();
+  new TelegramAdminBot(
+    env.TELEGRAM_BOT_TOKEN,
+    env.TELEGRAM_ADMIN_USER_ID ?? "",
+    job,
+    mercadoLivreOAuth,
+  ).start();
   if (!env.TELEGRAM_ADMIN_USER_ID) {
     console.log("Comandos administrativos desativados; alertas publicos continuam ativos.");
   }
 
-  startHttpServer(env.PORT, () => job.run(), () => job.testSend(), env.RUN_NOW_TOKEN);
+  startHttpServer(env.PORT, () => job.run(), () => job.testSend(), env.RUN_NOW_TOKEN, mercadoLivreOAuth);
   cron.schedule("0 20 * * *", () => {
     void job.publishDailySummary().catch((error) => console.error("Falha ao publicar resumo diario.", error));
   }, { timezone: "America/Sao_Paulo" });
@@ -133,11 +159,17 @@ function parseAdvertiserIds(value?: string): number[] | undefined {
   return ids.length ? ids : undefined;
 }
 
+function parseCategoryIds(value: string): string[] {
+  const ids = value.split(",").map((item) => item.trim()).filter((item) => /^MLB\d+$/.test(item));
+  return ids.length ? [...new Set(ids)] : ["MLB1648"];
+}
+
 function startHttpServer(
   port: number | undefined,
   runNow: () => Promise<unknown>,
   testSend: () => Promise<void>,
   runNowToken?: string,
+  mercadoLivreOAuth?: MercadoLivreOAuth,
 ): void {
   if (!port) return;
   createServer((request, response) => {
@@ -145,6 +177,28 @@ function startHttpServer(
     if (url.pathname === "/health") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end('{"status":"ok"}');
+      return;
+    }
+    if (url.pathname === "/oauth/mercadolivre/callback") {
+      if (!mercadoLivreOAuth) {
+        response.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
+        response.end("Integração do Mercado Livre não configurada.");
+        return;
+      }
+      const code = url.searchParams.get("code");
+      const state = url.searchParams.get("state");
+      const oauthError = url.searchParams.get("error");
+      if (oauthError || !code || !state) {
+        response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+        response.end(`Autorização recusada ou incompleta: ${oauthError ?? "parâmetros ausentes"}.`);
+        return;
+      }
+      void mercadoLivreOAuth.exchangeAuthorizationCode(code, state)
+        .then(() => {
+          response.writeHead(200, { "content-type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+          response.end("<h1>Mercado Livre autorizado</h1><p>Os tokens foram armazenados com segurança. Você pode fechar esta janela.</p>");
+        })
+        .catch((error) => sendOAuthError(response, error));
       return;
     }
     if (url.pathname === "/run-now") {
@@ -173,6 +227,12 @@ function startHttpServer(
     }
     response.writeHead(404).end();
   }).listen(port, "0.0.0.0", () => console.log(`HTTP ativo na porta ${port}.`));
+}
+
+function sendOAuthError(response: import("node:http").ServerResponse, error: unknown): void {
+  console.error("Falha no OAuth do Mercado Livre.", error);
+  response.writeHead(500, { "content-type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+  response.end("Não foi possível concluir a autorização. Confira os logs do serviço e tente novamente.");
 }
 
 main().catch((error) => {

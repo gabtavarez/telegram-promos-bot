@@ -29,6 +29,8 @@ import { AmazonProvider } from "../src/providers/AmazonProvider.js";
 import { AliExpressProvider, isAliExpressFocusProduct } from "../src/providers/aliexpress.provider.js";
 import { KabumProvider } from "../src/providers/KabumProvider.js";
 import { MercadoLivreProvider } from "../src/providers/MercadoLivreProvider.js";
+import { MercadoLivreApiProvider } from "../src/providers/MercadoLivreApiProvider.js";
+import type { MercadoLivreOAuth } from "../src/services/MercadoLivreOAuth.js";
 import { ShopeeProvider } from "../src/providers/ShopeeProvider.js";
 
 describe("provider delivery checks", () => {
@@ -168,6 +170,46 @@ describe("provider delivery checks", () => {
 
     await expect(new MercadoLivreProvider("https://ml.example/ofertas").getDeals())
       .rejects.toThrow("sem cards de ofertas");
+  });
+
+  it("coleta ofertas pela API oficial autenticada do Mercado Livre", async () => {
+    const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
+    axiosMocks.get.mockResolvedValue({
+      data: {
+        results: [{
+          id: "MLB123456",
+          title: "Monitor Gamer LG UltraGear 24 IPS 180Hz",
+          price: 779,
+          original_price: 999,
+          permalink: "https://www.mercadolivre.com.br/monitor/p/MLB123456",
+          secure_thumbnail: "https://http2.mlstatic.com/monitor.jpg",
+          available_quantity: 12,
+          condition: "new",
+          status: "active",
+        }],
+      },
+    });
+
+    const deals = await new MercadoLivreApiProvider(oauth, ["MLB1648"]).getDeals();
+
+    expect(oauth.getAccessToken).toHaveBeenCalledOnce();
+    expect(axiosMocks.get).toHaveBeenCalledWith("/sites/MLB/search", expect.objectContaining({
+      headers: { Authorization: "Bearer access-token" },
+      params: { category: "MLB1648", limit: 50 },
+    }));
+    expect(deals[0]).toMatchObject({
+      id: "mercado-livre:MLB123456",
+      currentPrice: 779,
+      previousPrice: 999,
+    });
+  });
+
+  it("rejeita resposta vazia da API oficial do Mercado Livre", async () => {
+    const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
+    axiosMocks.get.mockResolvedValue({ data: { results: [] } });
+
+    await expect(new MercadoLivreApiProvider(oauth, ["MLB1648"]).getDeals())
+      .rejects.toThrow("sem produtos");
   });
 
   it("extracts only quality Kabum deals", async () => {
