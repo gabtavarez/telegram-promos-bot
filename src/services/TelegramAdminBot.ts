@@ -21,6 +21,7 @@ export class TelegramAdminBot {
       { command: "oferta", description: "Publicar uma oferta agora" },
       { command: "teste", description: "Testar o novo modelo de mensagem" },
       { command: "status", description: "Ver o estado do bot" },
+      { command: "saude", description: "Diagnóstico detalhado das lojas" },
       { command: "buscar", description: "Buscar ofertas por termo" },
       { command: "cupons", description: "Listar cupons ativos" },
       { command: "pausar", description: "Pausar publicações automáticas" },
@@ -167,6 +168,28 @@ export class TelegramAdminBot {
       }
     });
 
+    this.bot.command("saude", async (context) => {
+      if (!(await this.requireAdmin(context))) return;
+      const health = await this.job.getProviderHealth();
+      if (health.length === 0) {
+        await context.reply("ℹ️ O diagnóstico estará disponível depois do próximo ciclo de busca.");
+        return;
+      }
+      const now = Date.now();
+      const lines = health.map((item) => {
+        const age = now - Date.parse(item.lastAttemptAt);
+        const icon = item.error ? "❌" : item.received === 0 || age > 20 * 60_000 ? "⚠️" : "✅";
+        return [
+          `${icon} <b>${escapeHtml(item.name)}</b>`,
+          `Recebidas: ${item.received} · qualidade: ${item.qualityApproved} · promocionais: ${item.promotable} · novas: ${item.newDeals}`,
+          `Tempo: ${formatDuration(item.durationMs)} · consulta: ${formatIsoDate(item.lastAttemptAt)}`,
+          item.lastSuccessAt ? `Último sucesso: ${formatIsoDate(item.lastSuccessAt)}` : "Último sucesso: nunca",
+          item.error ? `Erro: ${escapeHtml(item.error.slice(0, 160))}` : undefined,
+        ].filter(Boolean).join("\n");
+      });
+      await context.reply(["🩺 <b>SAÚDE DAS LOJAS</b>", "", ...lines].join("\n\n"), { parse_mode: "HTML" });
+    });
+
     this.bot.command("cupons", async (context) => {
       if (!(await this.requireAdmin(context))) return;
       const initialStatus = this.job.getCouponIntegrationStatus();
@@ -194,8 +217,11 @@ export class TelegramAdminBot {
       const lines = visible.map((coupon) => [
         `🎟️ <code>${escapeHtml(coupon.code)}</code> — <b>${escapeHtml(coupon.advertiserName)}</b>`,
         escapeHtml(coupon.title.slice(0, 120)),
+        coupon.eligibleProductCount ? `📦 ${coupon.eligibleProductCount} produto(s) elegível(is)` : undefined,
         `⏳ Até ${formatDateOnly(coupon.endsAt)}`,
-      ].join("\n"));
+        coupon.validatedAt ? `✅ Fonte validada em ${formatDate(coupon.validatedAt)}` : undefined,
+        `🔗 ${escapeHtml(coupon.destinationUrl)}`,
+      ].filter(Boolean).join("\n"));
       if (coupons.length > visible.length) lines.push(`… e mais ${coupons.length - visible.length} cupom(ns).`);
       await context.reply(lines.join("\n\n"), { parse_mode: "HTML" });
     });
@@ -243,6 +269,15 @@ function runResultMessage(result: JobRunResult): string {
 
 function formatDate(date?: Date): string {
   return date?.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) ?? "ainda não ocorreu";
+}
+
+function formatIsoDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "desconhecida" : formatDate(date);
+}
+
+function formatDuration(milliseconds: number): string {
+  return milliseconds < 1_000 ? `${milliseconds}ms` : `${(milliseconds / 1_000).toFixed(1)}s`;
 }
 
 function formatDateOnly(date: Date): string {

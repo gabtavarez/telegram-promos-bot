@@ -8,7 +8,7 @@ import { TelegramPublisher } from "./TelegramPublisher.js";
 import type { CouponProvider } from "../coupons/CouponProvider.js";
 import { findCouponForDeal } from "../coupons/CouponMatcher.js";
 import type { Coupon } from "../coupons/CouponProvider.js";
-import type { FeedbackCounts, FeedbackType, PriceHistoryStats, PublishedOffer, UserAlert } from "../types/BotState.js";
+import type { FeedbackCounts, FeedbackType, PriceHistoryStats, ProviderHealth, PublishedOffer, UserAlert } from "../types/BotState.js";
 import { checkDealAvailability, isDealAvailable } from "./DealAvailabilityChecker.js";
 import { enrichDealPayment } from "./DealPaymentEnricher.js";
 import { getVerifiedDiscount, normalizeDealPricing } from "../utils/price.js";
@@ -23,6 +23,7 @@ export class DealsJob {
   private readonly recentCategories: string[] = [];
   private cycleCount = 0;
   private legacyMessagesUpdated = false;
+  private cycleProviderHealth: ProviderHealth[] = [];
 
   constructor(
     private readonly providers: AffiliateProvider[],
@@ -64,6 +65,8 @@ export class DealsJob {
           `${available.length} nova(s) apos o historico de 12h.`,
       );
       logProviderAvailability(qualifiedDeals, available);
+      await this.persistProviderHealth(qualityCandidates, qualifiedDeals, available);
+      await this.publishNewCouponsSafely();
 
       await this.notifyAlerts(qualifiedDeals);
       this.cycleCount += 1;
@@ -238,16 +241,86 @@ export class DealsJob {
 
   private async collectDeals(): Promise<Deal[]> {
     const deals: Deal[] = [];
+    const previous = new Map((await this.store.getProviderHealth().catch(() => [])).map((item) => [item.name, item]));
+    this.cycleProviderHealth = [];
     for (const provider of this.providers) {
+      const startedAt = Date.now();
+      const attemptedAt = new Date().toISOString();
       try {
         const providerDeals = await provider.getDeals();
         deals.push(...providerDeals.map(normalizeDealPricing));
+        const providerError = provider.getLastError?.();
+        this.cycleProviderHealth.push({
+          name: provider.name,
+          lastAttemptAt: attemptedAt,
+          lastSuccessAt: providerError ? previous.get(provider.name)?.lastSuccessAt : attemptedAt,
+          lastFailureAt: providerError ? attemptedAt : previous.get(provider.name)?.lastFailureAt,
+          durationMs: Date.now() - startedAt,
+          received: providerDeals.length,
+          qualityApproved: 0,
+          promotable: 0,
+          newDeals: 0,
+          error: providerError?.slice(0, 300),
+        });
         console.log(`${provider.name}: ${providerDeals.length} ofertas encontradas.`);
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.cycleProviderHealth.push({
+          name: provider.name,
+          lastAttemptAt: attemptedAt,
+          lastSuccessAt: previous.get(provider.name)?.lastSuccessAt,
+          lastFailureAt: attemptedAt,
+          durationMs: Date.now() - startedAt,
+          received: 0,
+          qualityApproved: 0,
+          promotable: 0,
+          newDeals: 0,
+          error: message.slice(0, 300),
+        });
         console.error(`Falha ao consultar ${provider.name}.`, error);
       }
     }
     return deals;
+  }
+
+  private async persistProviderHealth(quality: Deal[], promotable: Deal[], fresh: Deal[]): Promise<void> {
+    const count = (deals: Deal[], name: string) => deals.filter((deal) => providerName(deal.provider) === name).length;
+    const health = this.cycleProviderHealth.map((item) => ({
+      ...item,
+      qualityApproved: count(quality, item.name),
+      promotable: count(promotable, item.name),
+      newDeals: count(fresh, item.name),
+    }));
+    try {
+      await this.store.saveProviderHealth(health);
+    } catch (error) {
+      console.warn("Nao foi possivel salvar o diagnostico das lojas.", error);
+    }
+  }
+
+  private async publishNewCouponsSafely(): Promise<void> {
+    if (!this.couponProvider) return;
+    try {
+      const coupons = await this.couponProvider.getActiveCoupons();
+      const sourceError = this.couponProvider.getLastError?.();
+      if (sourceError) {
+        console.warn(`Ciclo de cupons incompleto; o historico ativo foi preservado: ${sourceError}`);
+        return;
+      }
+      const newKeys = new Set(await this.store.syncActiveCouponKeys(coupons.map(couponKey)));
+      const newCoupons = coupons.filter((coupon) => newKeys.has(couponKey(coupon)));
+      if (newCoupons.length > 0) {
+        try {
+          await this.publisher.publishNewCoupons(newCoupons);
+        } catch (error) {
+          await this.store.syncActiveCouponKeys(coupons.map(couponKey).filter((key) => !newKeys.has(key)));
+          throw error;
+        }
+        console.log(`${newCoupons.length} novo(s) cupom(ns) anunciado(s).`);
+      }
+    } catch (error) {
+      console.warn("Nao foi possivel sincronizar os novos cupons.", error);
+    }
   }
 
   private async attachCoupon(deal: Deal): Promise<Deal> {
@@ -386,6 +459,10 @@ export class DealsJob {
     if (offers.length > 0) {
       console.log(`${offers.length} publicacao(oes) recente(s) atualizada(s) para o formato sem score.`);
     }
+  }
+
+  async getProviderHealth(): Promise<ProviderHealth[]> {
+    return this.store.getProviderHealth();
   }
 
   private rememberProvider(provider: ProviderName): void {
@@ -576,4 +653,19 @@ function logProviderAvailability(qualified: Deal[], available: Deal[]): void {
     return `${provider}: ${fresh}/${approved} nova(s)`;
   });
   console.log(`Disponibilidade por loja: ${summary.join("; ")}.`);
+}
+
+function providerName(provider: ProviderName): string {
+  const names: Record<ProviderName, string> = {
+    amazon: "Amazon",
+    "mercado-livre": "Mercado Livre",
+    aliexpress: "AliExpress",
+    kabum: "Kabum",
+    shopee: "Shopee",
+  };
+  return names[provider];
+}
+
+function couponKey(coupon: Coupon): string {
+  return `${coupon.advertiserId}:${coupon.advertiserName.toLowerCase()}:${coupon.code.toUpperCase()}`;
 }

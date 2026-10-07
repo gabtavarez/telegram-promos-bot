@@ -7,6 +7,7 @@ import type {
   FeedbackType,
   PriceHistoryStats,
   PublishedOffer,
+  ProviderHealth,
   UserAlert,
 } from "../types/BotState.js";
 import type { DealsStore } from "./DealsStore.js";
@@ -26,6 +27,8 @@ interface LocalBotState {
   alertNotifications: Record<string, string>;
   feedback: Record<string, { votes: Record<string, FeedbackType> }>;
   summaries: string[];
+  providerHealth?: ProviderHealth[];
+  activeCouponKeys?: string[];
 }
 
 const emptyState = (): LocalBotState => ({
@@ -164,6 +167,22 @@ export class PostedDealsStore implements DealsStore {
   async releaseDailySummary(date: string): Promise<void> {
     this.state.summaries = this.state.summaries.filter((item) => item !== date);
     await this.persistState();
+  }
+
+  async saveProviderHealth(health: ProviderHealth[]): Promise<void> {
+    this.state.providerHealth = health;
+    await this.persistState();
+  }
+
+  async getProviderHealth(): Promise<ProviderHealth[]> {
+    return this.state.providerHealth ?? [];
+  }
+
+  async syncActiveCouponKeys(keys: string[]): Promise<string[]> {
+    const previous = this.state.activeCouponKeys;
+    this.state.activeCouponKeys = [...new Set(keys)];
+    await this.persistState();
+    return previous ? this.state.activeCouponKeys.filter((key) => !previous.includes(key)) : [];
   }
 
   private async prune(now = Date.now()): Promise<void> {

@@ -11,6 +11,9 @@ export interface Coupon {
   minimumPurchase?: number;
   eligibleItemIds?: string[];
   confidence?: number;
+  /** Momento em que a fonte confirmou que o cupom continuava ativo. */
+  validatedAt?: Date;
+  eligibleProductCount?: number;
 }
 
 export interface CouponProvider {

@@ -4,6 +4,7 @@ import type {
   FeedbackType,
   PriceHistoryStats,
   PublishedOffer,
+  ProviderHealth,
   UserAlert,
 } from "../types/BotState.js";
 
@@ -24,4 +25,7 @@ export interface DealsStore {
   recordFeedback(feedbackKey: string, userId: string, type: FeedbackType): Promise<FeedbackCounts>;
   claimDailySummary(date: string): Promise<boolean>;
   releaseDailySummary(date: string): Promise<void>;
+  saveProviderHealth(health: ProviderHealth[]): Promise<void>;
+  getProviderHealth(): Promise<ProviderHealth[]>;
+  syncActiveCouponKeys(keys: string[]): Promise<string[]>;
 }

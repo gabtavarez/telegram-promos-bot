@@ -44,6 +44,7 @@ export class KabumProvider implements AffiliateProvider {
   readonly name = "Kabum";
   private readonly client: AxiosInstance;
   private feedSource = "automatico";
+  private lastError?: string;
 
   constructor(private readonly config: KabumConfig) {
     this.client = axios.create({
@@ -117,6 +118,7 @@ export class KabumProvider implements AffiliateProvider {
       });
 
       const uniqueDeals = [...new Map(deals.map((deal) => [deal.id, deal])).values()];
+      this.lastError = undefined;
       console.log(
         `Kabum/Awin (${this.feedSource}): ${stats.records} registro(s); ` +
           `${stats.withRequiredFields} com campos minimos; ` +
@@ -133,8 +135,13 @@ export class KabumProvider implements AffiliateProvider {
           ? error.message
           : String(error);
       console.error(`Falha na API de produtos da Kabum/Awin (${this.feedSource}): ${message}`);
+      this.lastError = message;
       return [];
     }
+  }
+
+  getLastError(): string | undefined {
+    return this.lastError;
   }
 
   private async fetchFeedRecords(): Promise<AwinFeedRecord[]> {

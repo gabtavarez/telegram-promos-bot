@@ -88,6 +88,7 @@ interface ShopeeResponse {
 export class ShopeeProvider implements AffiliateProvider {
   readonly name = "Shopee";
   private readonly client: AxiosInstance;
+  private lastError?: string;
 
   constructor(private readonly config: ShopeeConfig) {
     this.client = axios.create({
@@ -142,6 +143,7 @@ export class ShopeeProvider implements AffiliateProvider {
       });
 
       console.log(`Shopee API: ${products.length} produto(s) recebidos; ${deals.length} aprovado(s) pelo filtro.`);
+      this.lastError = undefined;
       return [...new Map(deals.map((deal) => [deal.id, deal])).values()];
     } catch (error) {
       const message = axios.isAxiosError(error)
@@ -150,8 +152,13 @@ export class ShopeeProvider implements AffiliateProvider {
           ? error.message
           : String(error);
       console.error(`Falha na API da Shopee: ${message}`);
+      this.lastError = message;
       return [];
     }
+  }
+
+  getLastError(): string | undefined {
+    return this.lastError;
   }
 
   private async queryProducts(keyword: string): Promise<ShopeeProduct[]> {

@@ -87,6 +87,7 @@ interface LinkGenerateResponse extends ApiErrorResponse {
 export class AliExpressProvider implements AffiliateProvider {
   readonly name = "AliExpress";
   private readonly client: AxiosInstance;
+  private lastError?: string;
 
   constructor(private readonly config: AliExpressConfig) {
     this.client = axios.create({
@@ -118,14 +119,17 @@ export class AliExpressProvider implements AffiliateProvider {
         isAliExpressFocusProduct(product.product_title) &&
         isPcHardwareDeal(product.product_title));
 
-      if (products.length === 0) return [];
+      if (products.length === 0) {
+        this.lastError = undefined;
+        return [];
+      }
 
       const sourceUrls = products
         .map((product) => product.product_detail_url)
         .filter((url): url is string => Boolean(url));
       const generatedLinks = await this.generateAffiliateLinks(sourceUrls);
 
-      return products.flatMap((product): Deal[] => {
+      const deals = products.flatMap((product): Deal[] => {
         const id = product.product_id;
         const title = product.product_title;
         const sourceUrl = product.product_detail_url;
@@ -149,6 +153,8 @@ export class AliExpressProvider implements AffiliateProvider {
           discountPercentage: calculateDiscount(currentPrice, originalPrice),
         }];
       });
+      this.lastError = undefined;
+      return deals;
     } catch (error) {
       const message = axios.isAxiosError(error)
         ? `${error.code ?? "HTTP_ERROR"}: ${error.message}`
@@ -156,8 +162,13 @@ export class AliExpressProvider implements AffiliateProvider {
           ? error.message
           : String(error);
       console.error(`Falha na API do AliExpress: ${message}`);
+      this.lastError = message;
       return [];
     }
+  }
+
+  getLastError(): string | undefined {
+    return this.lastError;
   }
 
   private async queryProducts(keyword: string): Promise<AliExpressProduct[]> {

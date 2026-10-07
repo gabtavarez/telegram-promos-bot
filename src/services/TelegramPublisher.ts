@@ -7,6 +7,7 @@ import type {
   PublishedOfferStatus,
 } from "../types/BotState.js";
 import { getVerifiedDiscount } from "../utils/price.js";
+import type { Coupon } from "../coupons/CouponProvider.js";
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -80,6 +81,38 @@ export class TelegramPublisher {
       "📌 Seleção automática por qualidade, preço, desconto e diversidade.",
     ].join("\n"), { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
   }
+
+  async publishNewCoupons(coupons: Coupon[]): Promise<void> {
+    if (coupons.length === 0) return;
+    const lines = coupons.slice(0, 10).flatMap((coupon) => [
+      `🏪 <b>${escapeHtml(coupon.advertiserName)}</b>`,
+      `🎟️ Cupom: <code>${escapeHtml(coupon.code)}</code>`,
+      escapeHtml(coupon.title.slice(0, 140)),
+      coupon.eligibleProductCount
+        ? `📦 ${coupon.eligibleProductCount} produto(s) elegível(is)`
+        : undefined,
+      `⏳ Válido até ${formatCouponDate(coupon.endsAt)}`,
+      `✅ Usar cupom: ${escapeHtml(coupon.destinationUrl)}`,
+      "",
+    ].filter((line): line is string => line !== undefined));
+    await this.bot.api.sendMessage(this.channelId, [
+      coupons.length === 1 ? "🎫 <b>NOVO CUPOM CONFIRMADO</b>" : "🎫 <b>NOVOS CUPONS CONFIRMADOS</b>",
+      "",
+      ...lines,
+      coupons.length > 10 ? `… e mais ${coupons.length - 10} disponível(is) no comando /cupons.` : undefined,
+      "ℹ️ Status confirmado automaticamente na fonte; disponibilidade pode mudar no checkout.",
+    ].filter((line): line is string => line !== undefined).join("\n"), { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+  }
+}
+
+function formatCouponDate(date: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 export function formatCaption(

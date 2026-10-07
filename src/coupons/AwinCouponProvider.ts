@@ -58,7 +58,8 @@ export class AwinCouponProvider implements CouponProvider {
         if (pageOffers.length < PAGE_SIZE) break;
       }
 
-      this.cache = offers.flatMap(normalizeAwinOffer);
+      const validatedAt = new Date();
+      this.cache = offers.flatMap((offer) => normalizeAwinOffer(offer, validatedAt));
       this.cacheExpiresAt = Date.now() + CACHE_DURATION_MS;
       this.lastError = undefined;
       console.log(`Awin: ${this.cache.length} cupom(ns) ativo(s) encontrado(s).`);
@@ -108,7 +109,7 @@ export function extractOffers(response: unknown): AwinOffer[] {
   return [];
 }
 
-function normalizeAwinOffer(offer: AwinOffer): Coupon[] {
+function normalizeAwinOffer(offer: AwinOffer, validatedAt: Date): Coupon[] {
   const code = offer.voucher?.code?.trim();
   const advertiserId = offer.advertiser?.id;
   const advertiserName = offer.advertiser?.name?.trim();
@@ -142,7 +143,14 @@ function normalizeAwinOffer(offer: AwinOffer): Coupon[] {
     startsAt,
     endsAt,
     exclusive: offer.voucher?.exclusive ?? false,
+    validatedAt,
+    eligibleProductCount: readEligibleProductCount(`${offer.title ?? ""} ${offer.terms ?? ""}`),
   }];
+}
+
+function readEligibleProductCount(value: string): number | undefined {
+  const count = Number(value.match(/\b(\d{1,5})\s+produtos?\s+selecionados?\b/i)?.[1]);
+  return Number.isFinite(count) && count > 0 ? count : undefined;
 }
 
 function normalizeUrl(value?: string): string | undefined {

@@ -110,6 +110,8 @@ export class MercadoLivreCouponProvider implements CouponProvider {
         minimumPurchase: signal.minimumPurchase,
         eligibleItemIds: explicitlyStoreWide ? undefined : eligibleItemIds,
         confidence: signal.sources.length,
+        validatedAt: now,
+        eligibleProductCount: explicitlyStoreWide ? undefined : eligibleItemIds.length,
       };
     }));
     return coupons.filter((coupon): coupon is Coupon => Boolean(coupon));
@@ -153,6 +155,7 @@ export function extractMercadoLivreCoupons(html: string, now = new Date()): Coup
       exclusive: /(?:afiliad|exclusiv)/i.test(context),
       minimumPurchase: readMinimumPurchase(context),
       confidence: 3,
+      validatedAt: now,
     });
   }
 

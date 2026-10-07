@@ -6,6 +6,7 @@ import type {
   FeedbackType,
   PriceHistoryStats,
   PublishedOffer,
+  ProviderHealth,
   UserAlert,
 } from "../types/BotState.js";
 import type { DealsStore } from "./DealsStore.js";
@@ -200,6 +201,25 @@ export class UpstashPostedDealsStore implements DealsStore {
     await this.command<number>(["DEL", summaryKey(date)]);
   }
 
+  async saveProviderHealth(health: ProviderHealth[]): Promise<void> {
+    await this.command<string>(["SET", providerHealthKey(), JSON.stringify(health)]);
+  }
+
+  async getProviderHealth(): Promise<ProviderHealth[]> {
+    const value = await this.command<string | null>(["GET", providerHealthKey()]);
+    return parseJson<ProviderHealth[]>(value, []);
+  }
+
+  async syncActiveCouponKeys(keys: string[]): Promise<string[]> {
+    return this.withMutationLock(async () => {
+      const value = await this.command<string | null>(["GET", activeCouponKeysKey()]);
+      const previous = value === null ? undefined : parseJson<string[]>(value, []);
+      const unique = [...new Set(keys)];
+      await this.command<string>(["SET", activeCouponKeysKey(), JSON.stringify(unique)]);
+      return previous ? unique.filter((key) => !previous.includes(key)) : [];
+    });
+  }
+
   private async command<T>(command: Array<string | number>): Promise<T> {
     const { data } = await this.client.post<UpstashResponse<T>>("/", command);
     if (data.error) throw new Error(`Upstash Redis: ${data.error}`);
@@ -246,6 +266,14 @@ function feedbackRedisKey(feedbackKey: string): string {
 
 function summaryKey(date: string): string {
   return `telegram-promos:summary:${date}`;
+}
+
+function providerHealthKey(): string {
+  return "telegram-promos:provider-health";
+}
+
+function activeCouponKeysKey(): string {
+  return "telegram-promos:active-coupons";
 }
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {

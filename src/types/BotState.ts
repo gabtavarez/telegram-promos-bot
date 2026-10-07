@@ -37,3 +37,16 @@ export interface PublishedOffer {
   publishedAt: string;
   status: PublishedOfferStatus;
 }
+
+export interface ProviderHealth {
+  name: string;
+  lastAttemptAt: string;
+  lastSuccessAt?: string;
+  lastFailureAt?: string;
+  durationMs: number;
+  received: number;
+  qualityApproved: number;
+  promotable: number;
+  newDeals: number;
+  error?: string;
+}

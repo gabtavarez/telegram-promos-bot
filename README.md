@@ -29,7 +29,9 @@ As URLs das páginas monitoradas (por padrão, ofertas de informática/hardware)
 
 No chat privado com o bot, qualquer usuário pode criar alertas com `/alerta RTX 4060 abaixo de 1900`, consultar com `/meus_alertas` e excluir com `/remover_alerta ID`.
 
-O administrador também pode usar `/oferta`, `/teste`, `/status`, `/buscar SSD`, `/cupons`, `/pausar` e `/retomar`. O comando `/teste` envia uma amostra ao canal sem registrar o produto como uma nova publicação.
+O administrador também pode usar `/oferta`, `/teste`, `/status`, `/saude`, `/buscar SSD`, `/cupons`, `/pausar` e `/retomar`. O comando `/teste` envia uma amostra ao canal sem registrar o produto como uma nova publicação. `/saude` mostra quando cada loja respondeu, a duração da consulta e quantas ofertas chegaram às etapas de qualidade, preço e novidade.
+
+Os cupons ativos são sincronizados automaticamente. Na primeira execução o bot apenas cria a referência inicial; depois disso, cada código realmente novo confirmado pela fonte é anunciado no canal uma única vez. Se uma fonte falhar, a referência anterior é preservada para evitar que cupons antigos sejam republicados como novos quando ela voltar.
 
 O bot mantém histórico diário de preços por até 90 dias para ajudar na seleção e revisa até oito publicações recentes a cada seis ciclos. O histórico não é exibido na mensagem. O mesmo produto pode reaparecer depois de 12 horas, desde que continue aprovado pelo filtro. Às 20h, no horário de São Paulo, publica automaticamente um resumo com as cinco melhores ofertas das últimas 24 horas.
 
