@@ -149,6 +149,27 @@ describe("provider delivery checks", () => {
     });
   });
 
+  it("rejeita a pagina de verificacao de trafego do Mercado Livre", async () => {
+    httpMocks.get.mockResolvedValue({
+      data: `
+        <html data-assets-prefix="https://http2.mlstatic.com/frontend-assets/suspicious-traffic-frontend/">
+          <div class="account-verification-header">Para continuar, acesse sua conta</div>
+          <a href="/registration?registrationType=negative_traffic">Entrar</a>
+        </html>
+      `,
+    });
+
+    await expect(new MercadoLivreProvider("https://ml.example/ofertas").getDeals())
+      .rejects.toThrow("verificacao de trafego suspeito");
+  });
+
+  it("rejeita resposta do Mercado Livre sem cards reconhecidos", async () => {
+    httpMocks.get.mockResolvedValue({ data: "<html><body>pagina inesperada</body></html>" });
+
+    await expect(new MercadoLivreProvider("https://ml.example/ofertas").getDeals())
+      .rejects.toThrow("sem cards de ofertas");
+  });
+
   it("extracts only quality Kabum deals", async () => {
     axiosMocks.get.mockResolvedValue({
       data: [

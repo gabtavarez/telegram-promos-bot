@@ -15,10 +15,18 @@ export class MercadoLivreProvider implements AffiliateProvider {
 
   async getDeals(): Promise<Deal[]> {
     const { data } = await http.get<string>(this.dealsUrl);
+    assertValidMercadoLivrePage(data);
     const $ = cheerio.load(data);
     const deals: Deal[] = [];
+    const cards = $(".promotion-item, .poly-card, .ui-search-result");
 
-    $(".promotion-item, .poly-card, .ui-search-result").each((_, element) => {
+    if (cards.length === 0) {
+      throw new Error(
+        "Mercado Livre respondeu sem cards de ofertas; a pagina pode ter mudado ou bloqueado a consulta automatica.",
+      );
+    }
+
+    cards.each((_, element) => {
       const card = $(element);
       const link = card.find("a[href]").filter((_, anchor) => {
         const href = $(anchor).attr("href") ?? "";
@@ -71,6 +79,22 @@ export class MercadoLivreProvider implements AffiliateProvider {
     });
 
     return [...new Map(deals.map((deal) => [deal.id, deal])).values()];
+  }
+}
+
+function assertValidMercadoLivrePage(html: string): void {
+  const normalized = html.toLowerCase();
+  const suspiciousTraffic = [
+    "suspicious-traffic-frontend",
+    "account-verification",
+    "registrationtype=negative_traffic",
+    "para continuar, acesse<br/>sua conta",
+  ].some((marker) => normalized.includes(marker));
+
+  if (suspiciousTraffic) {
+    throw new Error(
+      "Mercado Livre bloqueou a consulta com a verificacao de trafego suspeito; nenhuma oferta foi aceita.",
+    );
   }
 }
 
