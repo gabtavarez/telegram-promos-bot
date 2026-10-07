@@ -279,6 +279,53 @@ describe("provider delivery checks", () => {
     );
   });
 
+  it("resolve PRODUCT sem buy box pelo ranking publico do produto", async () => {
+    const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
+    axiosMocks.get.mockResolvedValueOnce({
+      data: { content: [{ id: "MLB24162817", type: "PRODUCT", position: 1 }] },
+    }).mockResolvedValueOnce({
+      data: {
+        id: "MLB24162817",
+        status: "active",
+        name: "Processador AMD Ryzen 7 5700X3D AM4",
+        permalink: "https://www.mercadolivre.com.br/processador-amd/p/MLB24162817",
+        pictures: [{ id: "123456-MLB12345678901_012026" }],
+        buy_box_winner: null,
+      },
+    }).mockResolvedValueOnce({
+      data: { content: [
+        { id: "MLBU3013800008", type: "USER_PRODUCT", position: 1 },
+        { id: "MLB765432100", type: "ITEM", position: 2 },
+      ] },
+    }).mockResolvedValueOnce({
+      data: {
+        id: "MLB765432100",
+        title: "Processador AMD Ryzen 7 5700X3D AM4",
+        price: 1299,
+        original_price: 1499,
+        permalink: "https://produto.mercadolivre.com.br/MLB-765432100",
+        secure_thumbnail: "https://http2.mlstatic.com/ryzen.jpg",
+        available_quantity: 20,
+        condition: "new",
+        status: "active",
+      },
+    });
+
+    const deals = await new MercadoLivreApiProvider(oauth, ["MLB1693"]).getDeals();
+
+    expect(deals[0]).toMatchObject({
+      id: "mercado-livre:MLB765432100",
+      currentPrice: 1299,
+      previousPrice: 1499,
+    });
+    expect(axiosMocks.get).toHaveBeenNthCalledWith(3, "/highlights/MLB/product/MLB24162817", {
+      headers: { Authorization: "Bearer access-token" },
+    });
+    expect(axiosMocks.get).toHaveBeenNthCalledWith(4, "/items/MLB765432100", {
+      headers: { Authorization: "Bearer access-token" },
+    });
+  });
+
   it("extracts only quality Kabum deals", async () => {
     axiosMocks.get.mockResolvedValue({
       data: [

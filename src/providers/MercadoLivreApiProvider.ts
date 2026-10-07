@@ -129,21 +129,46 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
       const { data } = await this.client.get<CatalogProduct>(`/products/${entry.id}`, request);
       const winner = data.buy_box_winner;
       const imageUrl = getCatalogImage(data);
-      if (!winner) return undefined;
-      return {
-        id: winner.item_id ?? winner.id ?? data.id,
-        title: data.name,
-        price: winner.price,
-        original_price: winner.original_price,
-        permalink: data.permalink,
-        secure_thumbnail: imageUrl,
-        available_quantity: winner.available_quantity,
-        condition: winner.condition,
-        status: data.status,
-      };
+      if (winner) {
+        return {
+          id: winner.item_id ?? winner.id ?? data.id,
+          title: data.name,
+          price: winner.price,
+          original_price: winner.original_price,
+          permalink: data.permalink,
+          secure_thumbnail: imageUrl,
+          available_quantity: winner.available_quantity,
+          condition: winner.condition,
+          status: data.status,
+        };
+      }
+
+      return this.resolvePublicItemFromProductRanking(entry.id, request);
     }
 
     return undefined;
+  }
+
+  private async resolvePublicItemFromProductRanking(
+    productId: string,
+    request: { headers: { Authorization: string } },
+  ): Promise<MercadoLivreItem> {
+    const { data } = await this.client.get<HighlightResponse>(`/highlights/MLB/product/${productId}`, request);
+    const publicItems = (data.content ?? []).filter((candidate) => candidate.type === "ITEM");
+    if (publicItems.length === 0) {
+      throw new Error("sem oferta vencedora e sem ITEM publico no ranking do produto");
+    }
+
+    let lastError: unknown;
+    for (const candidate of publicItems.slice(0, 3)) {
+      try {
+        const { data: item } = await this.client.get<MercadoLivreItem>(`/items/${candidate.id}`, request);
+        return item;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ?? new Error("nenhum ITEM publico do produto pôde ser consultado");
   }
 }
 
