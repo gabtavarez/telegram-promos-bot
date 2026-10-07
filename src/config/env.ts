@@ -24,6 +24,7 @@ const envSchema = z.object({
   ML_CLIENT_SECRET: optionalString,
   ML_REDIRECT_URI: optionalUrl,
   RENDER_EXTERNAL_URL: optionalUrl,
+  RENDER_EXTERNAL_HOSTNAME: optionalString,
   ML_API_CATEGORY_IDS: z.string().default("MLB1648"),
   AMAZON_DEALS_URL: z.url().default("https://www.amazon.com.br/deals?node=16339926011"),
   ML_DEALS_URL: z

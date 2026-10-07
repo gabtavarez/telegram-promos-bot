@@ -26,8 +26,11 @@ async function main(): Promise<void> {
     : new PostedDealsStore(env.DATA_FILE);
   await store.initialize();
 
-  const mercadoLivreRedirectUri = env.ML_REDIRECT_URI ?? (env.RENDER_EXTERNAL_URL
-    ? `${env.RENDER_EXTERNAL_URL.replace(/\/$/, "")}/oauth/mercadolivre/callback`
+  const renderBaseUrl = env.RENDER_EXTERNAL_URL ?? (env.RENDER_EXTERNAL_HOSTNAME
+    ? `https://${env.RENDER_EXTERNAL_HOSTNAME}`
+    : undefined);
+  const mercadoLivreRedirectUri = env.ML_REDIRECT_URI ?? (renderBaseUrl
+    ? `${renderBaseUrl.replace(/\/$/, "")}/oauth/mercadolivre/callback`
     : undefined);
   const mercadoLivreOAuth = env.ML_CLIENT_ID && env.ML_CLIENT_SECRET && mercadoLivreRedirectUri
     ? new MercadoLivreOAuth({
