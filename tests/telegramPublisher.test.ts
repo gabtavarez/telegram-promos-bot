@@ -132,6 +132,10 @@ describe("formatCaption", () => {
       ...baseDeal,
       title: "Jonsbo TM-360 AIO Liquid CPU Cooler 360mm ARGB para AM5",
     };
+    const waterCoolerFromAliExpress = {
+      ...baseDeal,
+      title: "Cooler AIO ProFlow SE 360mm ARGB Preto - Sistema de Resfriamento Líquido para CPU Tela LCD de 4 Polegadas",
+    };
     const airCooler = {
       ...baseDeal,
       title: "Deepcool AG400 Air Cooler CPU ARGB 220W",
@@ -143,6 +147,8 @@ describe("formatCaption", () => {
 
     expect(formatCaption(waterCooler, waterCooler.originalUrl)).toContain("#WaterCooler");
     expect(formatCaption(waterCooler, waterCooler.originalUrl)).not.toContain("#Processador");
+    expect(formatCaption(waterCoolerFromAliExpress, waterCoolerFromAliExpress.originalUrl)).toContain("#WaterCooler");
+    expect(formatCaption(waterCoolerFromAliExpress, waterCoolerFromAliExpress.originalUrl)).not.toContain("#Processador");
     expect(formatCaption(airCooler, airCooler.originalUrl)).toContain("#AirCooler");
     expect(formatCaption(fans, fans.originalUrl)).toContain("#Fans");
   });

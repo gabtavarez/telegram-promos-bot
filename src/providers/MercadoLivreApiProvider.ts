@@ -31,7 +31,10 @@ interface CatalogProduct {
   status?: string;
   name?: string;
   permalink?: string;
-  pictures?: Array<{ secure_url?: string; url?: string }>;
+  pictures?: Array<{ id?: string; secure_url?: string; url?: string }>;
+  pickers?: Array<{
+    products?: Array<{ thumbnail?: string; tags?: string[] }>;
+  }>;
   buy_box_winner?: {
     item_id?: string;
     id?: string;
@@ -41,8 +44,11 @@ interface CatalogProduct {
     condition?: string;
   };
 }
-interface UserProduct { user_id?: number; item_id?: string; items?: Array<{ id?: string }>; }
-interface ItemSearchResponse { results?: string[]; }
+
+interface DealConversion {
+  deal?: Deal;
+  rejection?: string;
+}
 
 export class MercadoLivreApiProvider implements AffiliateProvider {
   readonly name = "Mercado Livre";
@@ -76,7 +82,12 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
     }
 
     const resolutionFailures = new Map<string, number>();
-    const items = await mapWithConcurrency(unique, 5, async (entry) => {
+    const supportedEntries = unique.filter((entry) => {
+      if (entry.type !== "USER_PRODUCT") return true;
+      incrementCount(resolutionFailures, "USER_PRODUCT privado ignorado");
+      return false;
+    });
+    const items = await mapWithConcurrency(supportedEntries, 5, async (entry) => {
       try {
         return await this.resolveEntry(entry, request);
       } catch (error) {
@@ -86,11 +97,21 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
       }
     });
 
-    const deals = items.flatMap((item): Deal[] => item ? toDeal(item) : []);
+    const rejectionReasons = new Map<string, number>();
+    const deals: Deal[] = [];
+    for (const item of items) {
+      if (!item) {
+        incrementCount(rejectionReasons, "produto de catalogo sem oferta vencedora");
+        continue;
+      }
+      const converted = toDeal(item);
+      if (converted.deal) deals.push(converted.deal);
+      else incrementCount(rejectionReasons, converted.rejection ?? "motivo desconhecido");
+    }
     if (deals.length === 0) {
       throw new Error(
         `Mercado Livre retornou ${unique.length} produto(s) populares, mas nenhum detalhe publicavel pôde ser obtido. ` +
-        formatFailureSummary(resolutionFailures),
+        formatFailureSummary(resolutionFailures, rejectionReasons),
       );
     }
     return [...new Map(deals.map((deal) => [deal.id, deal])).values()];
@@ -107,7 +128,7 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
     if (entry.type === "PRODUCT") {
       const { data } = await this.client.get<CatalogProduct>(`/products/${entry.id}`, request);
       const winner = data.buy_box_winner;
-      const image = data.pictures?.[0];
+      const imageUrl = getCatalogImage(data);
       if (!winner) return undefined;
       return {
         id: winner.item_id ?? winner.id ?? data.id,
@@ -115,48 +136,61 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
         price: winner.price,
         original_price: winner.original_price,
         permalink: data.permalink,
-        secure_thumbnail: image?.secure_url ?? image?.url,
+        secure_thumbnail: imageUrl,
         available_quantity: winner.available_quantity,
         condition: winner.condition,
         status: data.status,
       };
     }
 
-    const { data } = await this.client.get<UserProduct>(`/user-products/${entry.id}`, request);
-    const direct = data.item_id ?? data.items?.find((item) => item.id)?.id;
-    let itemId = direct;
-    if (!itemId && data.user_id) {
-      const search = await this.client.get<ItemSearchResponse>(`/users/${data.user_id}/items/search`, {
-        ...request,
-        params: { user_product_id: entry.id, limit: 1 },
-      });
-      itemId = search.data.results?.[0];
-    }
-    if (!itemId) return undefined;
-    const item = await this.client.get<MercadoLivreItem>(`/items/${itemId}`, request);
-    return item.data;
+    return undefined;
   }
 }
 
-function toDeal(item: MercadoLivreItem): Deal[] {
+function toDeal(item: MercadoLivreItem): DealConversion {
   const currentPrice = finitePositive(item.price);
   const previousPrice = finitePositive(item.original_price);
   const imageUrl = item.secure_thumbnail ?? item.thumbnail ?? item.pictures?.[0]?.secure_url ?? item.pictures?.[0]?.url;
-  if (!item.id || !item.title || !item.permalink || !imageUrl || !currentPrice) return [];
-  if (item.condition && item.condition !== "new") return [];
-  if (item.status && item.status !== "active") return [];
-  if (item.available_quantity !== undefined && item.available_quantity <= 0) return [];
-  if (!isPcHardwareDeal(item.title)) return [];
-  return [{
-    id: `mercado-livre:${item.id.replace("-", "")}`,
+  const missing = [
+    !item.id && "id",
+    !item.title && "titulo",
+    !item.permalink && "link",
+    !imageUrl && "imagem",
+    !currentPrice && "preco",
+  ].filter(Boolean);
+  if (missing.length) return { rejection: `dados incompletos (${missing.join(", ")})` };
+  const id = item.id!;
+  const title = item.title!;
+  const permalink = item.permalink!;
+  const publishableImageUrl = imageUrl!;
+  const publishablePrice = currentPrice!;
+  if (item.condition && item.condition !== "new") return { rejection: "produto nao novo" };
+  if (item.status && item.status !== "active") return { rejection: "produto inativo" };
+  if (item.available_quantity !== undefined && item.available_quantity <= 0) return { rejection: "sem estoque" };
+  if (!isPcHardwareDeal(title)) return { rejection: "fora do filtro de qualidade" };
+  return { deal: {
+    id: `mercado-livre:${id.replace("-", "")}`,
     provider: "mercado-livre",
-    title: item.title,
-    originalUrl: item.permalink,
-    imageUrl: imageUrl.replace(/^http:/, "https:"),
-    currentPrice,
-    previousPrice: previousPrice && previousPrice > currentPrice ? previousPrice : undefined,
-    discountPercentage: calculateDiscount(currentPrice, previousPrice),
-  }];
+    title,
+    originalUrl: permalink,
+    imageUrl: publishableImageUrl.replace(/^http:/, "https:"),
+    currentPrice: publishablePrice,
+    previousPrice: previousPrice && previousPrice > publishablePrice ? previousPrice : undefined,
+    discountPercentage: calculateDiscount(publishablePrice, previousPrice),
+  } };
+}
+
+function getCatalogImage(product: CatalogProduct): string | undefined {
+  const picture = product.pictures?.[0];
+  const direct = picture?.secure_url ?? picture?.url;
+  if (direct) return direct;
+
+  const pickerProducts = product.pickers?.flatMap((picker) => picker.products ?? []) ?? [];
+  const selected = pickerProducts.find((candidate) => candidate.tags?.includes("selected"));
+  const thumbnail = selected?.thumbnail ?? pickerProducts.find((candidate) => candidate.thumbnail)?.thumbnail;
+  if (thumbnail) return thumbnail;
+
+  return picture?.id ? `https://http2.mlstatic.com/D_NQ_NP_${picture.id}-F.jpg` : undefined;
 }
 
 async function mapWithConcurrency<T, R>(
@@ -185,13 +219,21 @@ function apiErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function formatFailureSummary(failures: Map<string, number>): string {
-  if (failures.size === 0) return "Os produtos nao tinham oferta vencedora ou foram bloqueados pelo filtro.";
+function formatFailureSummary(...groups: Array<Map<string, number>>): string {
+  const failures = new Map<string, number>();
+  for (const group of groups) {
+    for (const [reason, count] of group) incrementCount(failures, reason, count);
+  }
+  if (failures.size === 0) return "Nenhum motivo de descarte foi informado.";
   return [...failures.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4)
     .map(([reason, count]) => `${count}x ${reason}`)
     .join(" | ");
+}
+
+function incrementCount(counts: Map<string, number>, key: string, amount = 1): void {
+  counts.set(key, (counts.get(key) ?? 0) + amount);
 }
 
 function finitePositive(value?: number): number | undefined {

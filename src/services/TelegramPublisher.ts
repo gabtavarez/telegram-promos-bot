@@ -193,7 +193,7 @@ export function getCategoryHashtag(title: string): string {
     return "#Setup";
   }
   const categories: Array<[RegExp, string]> = [
-    [/\b(?:water\s*cooler|watercooler|aio\s+(?:liquid\s+)?(?:cpu\s+)?cooler|liquid\s+(?:cpu\s+)?cooler|refrigera[cç][aã]o\s+l[ií]quida)\b/, "#WaterCooler"],
+    [/\b(?:water\s*cooler|watercooler|aio|liquid\s+(?:cpu\s+)?cooler|(?:sistema\s+de\s+)?resfriamento\s+liquido|refrigeracao\s+liquida)\b/, "#WaterCooler"],
     [/\b(?:air\s*cooler|cpu\s+air\s+cooler|refrigerador\s+(?:de\s+)?cpu|cooler\s+torre)\b/, "#AirCooler"],
     [/\b(?:fan|fans|ventoinha|ventoinhas)\s+(?:pc\s+)?argb\b|\bargb\s+(?:pc\s+)?(?:fan|fans|ventoinha|ventoinhas)\b/, "#Fans"],
     [/\b(?:apple\s+)?iphone\s+(?:13|14|15|16|17)\b/, "#iPhone"],

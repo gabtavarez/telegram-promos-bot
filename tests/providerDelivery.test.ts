@@ -246,6 +246,39 @@ describe("provider delivery checks", () => {
     expect(axiosMocks.get).toHaveBeenCalledTimes(2);
   });
 
+  it("ignora USER_PRODUCT privado e aceita imagem por id no catalogo do Mercado Livre", async () => {
+    const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
+    axiosMocks.get.mockResolvedValueOnce({
+      data: { content: [
+        { id: "MLBU3013800008", type: "USER_PRODUCT", position: 1 },
+        { id: "MLB24162817", type: "PRODUCT", position: 2 },
+      ] },
+    }).mockResolvedValueOnce({
+      data: {
+        id: "MLB24162817",
+        status: "active",
+        name: "Processador AMD Ryzen 7 5700X3D AM4",
+        permalink: "https://www.mercadolivre.com.br/processador-amd/p/MLB24162817",
+        pictures: [{ id: "123456-MLB12345678901_012026" }],
+        buy_box_winner: {
+          item_id: "MLB987654321",
+          price: 1299,
+          available_quantity: 20,
+          condition: "new",
+        },
+      },
+    });
+
+    const deals = await new MercadoLivreApiProvider(oauth, ["MLB1693"]).getDeals();
+
+    expect(deals[0]?.imageUrl).toBe("https://http2.mlstatic.com/D_NQ_NP_123456-MLB12345678901_012026-F.jpg");
+    expect(axiosMocks.get).toHaveBeenCalledTimes(2);
+    expect(axiosMocks.get).not.toHaveBeenCalledWith(
+      "/user-products/MLBU3013800008",
+      expect.anything(),
+    );
+  });
+
   it("extracts only quality Kabum deals", async () => {
     axiosMocks.get.mockResolvedValue({
       data: [
