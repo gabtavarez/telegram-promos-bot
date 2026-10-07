@@ -19,6 +19,7 @@ import { CompositeCouponProvider } from "./coupons/CompositeCouponProvider.js";
 import { MercadoLivreCouponProvider } from "./coupons/MercadoLivreCouponProvider.js";
 import type { CouponProvider } from "./coupons/CouponProvider.js";
 import { MercadoLivreOAuth } from "./services/MercadoLivreOAuth.js";
+import { safeErrorMessage } from "./utils/safeError.js";
 
 async function main(): Promise<void> {
   const store: DealsStore = env.UPSTASH_REDIS_REST_URL
@@ -233,7 +234,7 @@ function startHttpServer(
 }
 
 function sendOAuthError(response: import("node:http").ServerResponse, error: unknown): void {
-  console.error("Falha no OAuth do Mercado Livre.", error);
+  console.error(`Falha no OAuth do Mercado Livre: ${safeErrorMessage(error)}`);
   response.writeHead(500, { "content-type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
   response.end("Não foi possível concluir a autorização. Confira os logs do serviço e tente novamente.");
 }

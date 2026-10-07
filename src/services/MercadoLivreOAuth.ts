@@ -102,6 +102,18 @@ export class MercadoLivreOAuth {
     if (this.redis) await this.redisCommand(["DEL", tokenKey()]);
   }
 
+  async revokeAuthorization(): Promise<void> {
+    const current = await this.loadToken();
+    if (!current) return;
+    const accessToken = await this.getAccessToken();
+    if (!current.userId) throw new Error("Token do Mercado Livre nao possui o ID do usuario autorizado.");
+    await this.client.delete(
+      `https://api.mercadolibre.com/users/${current.userId}/applications/${this.options.clientId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    await this.clearToken();
+  }
+
   private async requestToken(form: URLSearchParams): Promise<TokenPayload> {
     const { data } = await this.client.post<{
       access_token: string;

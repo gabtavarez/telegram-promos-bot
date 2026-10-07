@@ -174,29 +174,31 @@ describe("provider delivery checks", () => {
 
   it("coleta ofertas pela API oficial autenticada do Mercado Livre", async () => {
     const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
-    axiosMocks.get.mockResolvedValue({
+    axiosMocks.get.mockResolvedValueOnce({
+      data: { content: [{ id: "MLB123456", type: "ITEM", position: 1 }] },
+    }).mockResolvedValueOnce({
       data: {
-        results: [{
-          id: "MLB123456",
-          title: "Monitor Gamer LG UltraGear 24 IPS 180Hz",
-          price: 779,
-          original_price: 999,
-          permalink: "https://www.mercadolivre.com.br/monitor/p/MLB123456",
-          secure_thumbnail: "https://http2.mlstatic.com/monitor.jpg",
-          available_quantity: 12,
-          condition: "new",
-          status: "active",
-        }],
+        id: "MLB123456",
+        title: "Monitor Gamer LG UltraGear 24 IPS 180Hz",
+        price: 779,
+        original_price: 999,
+        permalink: "https://www.mercadolivre.com.br/monitor/p/MLB123456",
+        secure_thumbnail: "https://http2.mlstatic.com/monitor.jpg",
+        available_quantity: 12,
+        condition: "new",
+        status: "active",
       },
     });
 
-    const deals = await new MercadoLivreApiProvider(oauth, ["MLB1648"]).getDeals();
+    const deals = await new MercadoLivreApiProvider(oauth, ["MLB99245"]).getDeals();
 
     expect(oauth.getAccessToken).toHaveBeenCalledOnce();
-    expect(axiosMocks.get).toHaveBeenCalledWith("/sites/MLB/search", expect.objectContaining({
+    expect(axiosMocks.get).toHaveBeenNthCalledWith(1, "/highlights/MLB/category/MLB99245", {
       headers: { Authorization: "Bearer access-token" },
-      params: { category: "MLB1648", limit: 50 },
-    }));
+    });
+    expect(axiosMocks.get).toHaveBeenNthCalledWith(2, "/items/MLB123456", {
+      headers: { Authorization: "Bearer access-token" },
+    });
     expect(deals[0]).toMatchObject({
       id: "mercado-livre:MLB123456",
       currentPrice: 779,
@@ -206,10 +208,10 @@ describe("provider delivery checks", () => {
 
   it("rejeita resposta vazia da API oficial do Mercado Livre", async () => {
     const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
-    axiosMocks.get.mockResolvedValue({ data: { results: [] } });
+    axiosMocks.get.mockResolvedValue({ data: { content: [] } });
 
-    await expect(new MercadoLivreApiProvider(oauth, ["MLB1648"]).getDeals())
-      .rejects.toThrow("sem produtos");
+    await expect(new MercadoLivreApiProvider(oauth, ["MLB99245"]).getDeals())
+      .rejects.toThrow("nao retornou produtos");
   });
 
   it("extracts only quality Kabum deals", async () => {

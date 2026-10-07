@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const axiosMocks = vi.hoisted(() => ({
   create: vi.fn(),
   post: vi.fn(),
+  delete: vi.fn(),
 }));
 
 vi.mock("axios", () => ({
@@ -15,7 +16,7 @@ import { MercadoLivreOAuth } from "../src/services/MercadoLivreOAuth.js";
 describe("MercadoLivreOAuth", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    axiosMocks.create.mockReturnValue({ post: axiosMocks.post });
+    axiosMocks.create.mockReturnValue({ post: axiosMocks.post, delete: axiosMocks.delete });
   });
 
   it("usa state e PKCE ao trocar o codigo e conserva o token em memoria", async () => {
@@ -81,5 +82,27 @@ describe("MercadoLivreOAuth", () => {
     const refreshRequest = new URLSearchParams(axiosMocks.post.mock.calls[1]?.[1] as string);
     expect(refreshRequest.get("grant_type")).toBe("refresh_token");
     expect(refreshRequest.get("refresh_token")).toBe("refresh-1");
+  });
+
+  it("revoga a autorizacao e elimina os tokens locais", async () => {
+    axiosMocks.post.mockResolvedValue({
+      data: { access_token: "access-token", refresh_token: "refresh-token", expires_in: 21_600, user_id: 123 },
+    });
+    axiosMocks.delete.mockResolvedValue({ data: { msg: "Autorización eliminada" } });
+    const oauth = new MercadoLivreOAuth({
+      clientId: "client-id",
+      clientSecret: "client-secret",
+      redirectUri: "https://example.com/oauth/mercadolivre/callback",
+    });
+    const authorizationUrl = new URL(await oauth.createAuthorizationUrl());
+    await oauth.exchangeAuthorizationCode("code", authorizationUrl.searchParams.get("state")!);
+
+    await oauth.revokeAuthorization();
+
+    expect(axiosMocks.delete).toHaveBeenCalledWith(
+      "https://api.mercadolibre.com/users/123/applications/client-id",
+      { headers: { Authorization: "Bearer access-token" } },
+    );
+    await expect(oauth.getAccessToken()).rejects.toThrow("ainda nao foi autorizado");
   });
 });

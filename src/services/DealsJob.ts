@@ -12,6 +12,7 @@ import type { FeedbackCounts, FeedbackType, PriceHistoryStats, ProviderHealth, P
 import { checkDealAvailability, isDealAvailable } from "./DealAvailabilityChecker.js";
 import { enrichDealPayment } from "./DealPaymentEnricher.js";
 import { getVerifiedDiscount, normalizeDealPricing } from "../utils/price.js";
+import { safeErrorMessage } from "../utils/safeError.js";
 
 export class DealsJob {
   private running = false;
@@ -277,7 +278,7 @@ export class DealsJob {
           newDeals: 0,
           error: message.slice(0, 300),
         });
-        console.error(`Falha ao consultar ${provider.name}.`, error);
+        console.error(`Falha ao consultar ${provider.name}: ${safeErrorMessage(error)}`);
       }
     }
     return deals;
