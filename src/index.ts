@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     : undefined);
   const mercadoLivreRedirectUri = env.ML_REDIRECT_URI ?? (renderBaseUrl
     ? `${renderBaseUrl.replace(/\/$/, "")}/oauth/mercadolivre/callback`
-    : undefined);
+    : "https://telegram-promos-bot.onrender.com/oauth/mercadolivre/callback");
   const mercadoLivreOAuth = env.ML_CLIENT_ID && env.ML_CLIENT_SECRET && mercadoLivreRedirectUri
     ? new MercadoLivreOAuth({
         clientId: env.ML_CLIENT_ID,
