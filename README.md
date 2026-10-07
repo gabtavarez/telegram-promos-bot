@@ -23,7 +23,7 @@ Preencha no `.env`:
 
 Para buscar cupons oficiais ativos na Awin, configure `AWIN_PUBLISHER_ID` e `AWIN_ACCESS_TOKEN`. A integração é ativada automaticamente quando ambos existem. `AWIN_COUPONS_ENABLED=false` pode desativá-la explicitamente. A variável opcional `AWIN_ADVERTISER_IDS` aceita IDs separados por vírgula para limitar a busca às lojas desejadas.
 
-Para usar a API oficial do Mercado Livre, configure `ML_CLIENT_ID` e `ML_CLIENT_SECRET`. No serviço atual, a URI padrão é `https://telegram-promos-bot.onrender.com/oauth/mercadolivre/callback`; `ML_REDIRECT_URI` pode sobrescrevê-la se o domínio mudar. Após o deploy, o administrador deve abrir o chat privado do bot e usar `/autorizar_meli`. O fluxo usa Authorization Code com PKCE, guarda os tokens criptografados no Upstash e renova automaticamente o access token. A descoberta utiliza o ranking oficial de mais vendidos em categorias-folha configuradas por `ML_API_CATEGORY_IDS`, seguido da consulta autenticada dos detalhes de cada item. `/reautorizar_meli` revoga imediatamente a autorização anterior e inicia uma conexão nova. Se as credenciais não existirem, o provedor antigo da página pública permanece como fallback.
+O Mercado Livre é consultado pela página pública configurada em `ML_DEALS_URL`. A coleta não exige OAuth nem credenciais de vendedor e reconhece cards HTML e dados estruturados embutidos na página.
 
 As URLs das páginas monitoradas (por padrão, ofertas de informática/hardware), o caminho do histórico e a execução imediata ao iniciar também podem ser alterados pelas variáveis opcionais documentadas em `.env.example`. A Amazon fica desativada por padrão; só use `AMAZON_ENABLED=true` depois de confirmar que a coleta e a divulgação cumprem as regras da sua conta de Associado.
 
@@ -31,7 +31,7 @@ As URLs das páginas monitoradas (por padrão, ofertas de informática/hardware)
 
 No chat privado com o bot, qualquer usuário pode criar alertas com `/alerta RTX 4060 abaixo de 1900`, consultar com `/meus_alertas` e excluir com `/remover_alerta ID`.
 
-O administrador também pode usar `/oferta`, `/teste`, `/status`, `/saude`, `/buscar SSD`, `/cupons`, `/autorizar_meli`, `/reautorizar_meli`, `/pausar` e `/retomar`. O comando `/teste` envia uma amostra ao canal sem registrar o produto como uma nova publicação. `/saude` mostra quando cada loja respondeu, a duração da consulta e quantas ofertas chegaram às etapas de qualidade, preço e novidade.
+O administrador também pode usar `/oferta`, `/teste`, `/status`, `/saude`, `/buscar SSD`, `/cupons`, `/pausar` e `/retomar`. O comando `/teste` envia uma amostra ao canal sem registrar o produto como uma nova publicação. `/saude` mostra quando cada loja respondeu, a duração da consulta e quantas ofertas chegaram às etapas de qualidade, preço e novidade.
 
 Os cupons ativos são sincronizados automaticamente. Na primeira execução o bot apenas cria a referência inicial; depois disso, cada código realmente novo confirmado pela fonte é anunciado no canal uma única vez. Se uma fonte falhar, a referência anterior é preservada para evitar que cupons antigos sejam republicados como novos quando ela voltar.
 

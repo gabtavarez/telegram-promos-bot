@@ -1,8 +1,6 @@
 import { Bot, InlineKeyboard } from "grammy";
 import type { DealsJob, JobRunResult } from "./DealsJob.js";
 import { formatCaption } from "./TelegramPublisher.js";
-import type { MercadoLivreOAuth } from "./MercadoLivreOAuth.js";
-import { safeErrorMessage } from "../utils/safeError.js";
 
 export class TelegramAdminBot {
   private readonly bot: Bot;
@@ -11,7 +9,6 @@ export class TelegramAdminBot {
     token: string,
     private readonly adminUserId: string,
     private readonly job: DealsJob,
-    private readonly mercadoLivreOAuth?: MercadoLivreOAuth,
   ) {
     this.bot = new Bot(token);
     this.registerHandlers();
@@ -31,12 +28,6 @@ export class TelegramAdminBot {
       { command: "saude", description: "Diagnóstico detalhado das lojas" },
       { command: "buscar", description: "Buscar ofertas por termo" },
       { command: "cupons", description: "Listar cupons ativos" },
-      ...(this.mercadoLivreOAuth
-        ? [
-            { command: "autorizar_meli", description: "Conectar a API do Mercado Livre" },
-            { command: "reautorizar_meli", description: "Revogar e reconectar o Mercado Livre" },
-          ]
-        : []),
       { command: "pausar", description: "Pausar publicações automáticas" },
       { command: "retomar", description: "Retomar publicações automáticas" },
       ...publicCommands,
@@ -64,50 +55,6 @@ export class TelegramAdminBot {
         "",
         "Use /meus_alertas para consultar e /remover_alerta ID para excluir.",
       ].join("\n"));
-    });
-
-    this.bot.command("autorizar_meli", async (context) => {
-      if (!(await this.requireAdmin(context))) return;
-      if (!ensurePrivateChat(context.chat.type)) {
-        await context.reply("Use este comando no chat privado com o bot.");
-        return;
-      }
-      if (!this.mercadoLivreOAuth) {
-        await context.reply("⚠️ As credenciais da API do Mercado Livre não estão configuradas.");
-        return;
-      }
-      const authorizationUrl = await this.mercadoLivreOAuth.createAuthorizationUrl();
-      await context.reply([
-        "🔐 Autorize o BotTavPromos no Mercado Livre:",
-        authorizationUrl,
-        "",
-        "O link expira em 10 minutos e só pode ser usado uma vez.",
-      ].join("\n"), { link_preview_options: { is_disabled: true } });
-    });
-
-    this.bot.command("reautorizar_meli", async (context) => {
-      if (!(await this.requireAdmin(context))) return;
-      if (!ensurePrivateChat(context.chat.type)) {
-        await context.reply("Use este comando no chat privado com o bot.");
-        return;
-      }
-      if (!this.mercadoLivreOAuth) {
-        await context.reply("⚠️ As credenciais da API do Mercado Livre não estão configuradas.");
-        return;
-      }
-      try {
-        await this.mercadoLivreOAuth.revokeAuthorization();
-        const authorizationUrl = await this.mercadoLivreOAuth.createAuthorizationUrl();
-        await context.reply([
-          "🔐 A autorização anterior foi revogada. Reconecte o Mercado Livre:",
-          authorizationUrl,
-          "",
-          "O link expira em 10 minutos e só pode ser usado uma vez.",
-        ].join("\n"), { link_preview_options: { is_disabled: true } });
-      } catch (error) {
-        console.error(`Falha ao revogar a autorizacao do Mercado Livre: ${safeErrorMessage(error)}`);
-        await context.reply("❌ Não foi possível revogar a autorização. Tente novamente em alguns instantes.");
-      }
     });
 
     this.bot.command("alerta", async (context) => {

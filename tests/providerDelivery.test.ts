@@ -29,8 +29,6 @@ import { AmazonProvider } from "../src/providers/AmazonProvider.js";
 import { AliExpressProvider, isAliExpressFocusProduct } from "../src/providers/aliexpress.provider.js";
 import { KabumProvider } from "../src/providers/KabumProvider.js";
 import { MercadoLivreProvider } from "../src/providers/MercadoLivreProvider.js";
-import { MercadoLivreApiProvider } from "../src/providers/MercadoLivreApiProvider.js";
-import type { MercadoLivreOAuth } from "../src/services/MercadoLivreOAuth.js";
 import { ShopeeProvider } from "../src/providers/ShopeeProvider.js";
 
 describe("provider delivery checks", () => {
@@ -151,6 +149,61 @@ describe("provider delivery checks", () => {
     });
   });
 
+  it("extrai oferta do Mercado Livre pelos dados estruturados sem depender das classes dos cards", async () => {
+    httpMocks.get.mockResolvedValue({
+      data: `
+        <html><body>
+          <script type="application/ld+json">
+            {
+              "@type": "ItemList",
+              "itemListElement": [{
+                "item": {
+                  "@type": "Product",
+                  "name": "Monitor Gamer LG UltraGear 24 IPS 180Hz",
+                  "url": "https://www.mercadolivre.com.br/monitor-lg/p/MLB987654",
+                  "image": "https://http2.mlstatic.com/monitor-lg.jpg",
+                  "offers": { "price": "779.90", "highPrice": "999.90" }
+                }
+              }]
+            }
+          </script>
+        </body></html>`,
+    });
+
+    const deals = await new MercadoLivreProvider("https://ml.example/ofertas").getDeals();
+
+    expect(deals).toHaveLength(1);
+    expect(deals[0]).toMatchObject({
+      id: "mercado-livre:MLB987654",
+      currentPrice: 779.9,
+      previousPrice: 999.9,
+    });
+  });
+
+  it("extrai oferta do estado JSON embutido pelo Mercado Livre", async () => {
+    httpMocks.get.mockResolvedValue({
+      data: `
+        <script>
+          window.__PRELOADED_STATE__ = {"results":[{
+            "title":"SSD NVMe Kingston 1TB M.2 PCIe 4.0",
+            "permalink":"https://produto.mercadolivre.com.br/MLB-7654321",
+            "thumbnail":"//http2.mlstatic.com/ssd.jpg",
+            "price":{"amount":349.9},
+            "original_price":449.9
+          }]};
+        </script>`,
+    });
+
+    const deals = await new MercadoLivreProvider("https://ml.example/ofertas").getDeals();
+
+    expect(deals[0]).toMatchObject({
+      id: "mercado-livre:MLB7654321",
+      imageUrl: "https://http2.mlstatic.com/ssd.jpg",
+      currentPrice: 349.9,
+      previousPrice: 449.9,
+    });
+  });
+
   it("rejeita a pagina de verificacao de trafego do Mercado Livre", async () => {
     httpMocks.get.mockResolvedValue({
       data: `
@@ -170,160 +223,6 @@ describe("provider delivery checks", () => {
 
     await expect(new MercadoLivreProvider("https://ml.example/ofertas").getDeals())
       .rejects.toThrow("sem cards de ofertas");
-  });
-
-  it("coleta ofertas pela API oficial autenticada do Mercado Livre", async () => {
-    const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
-    axiosMocks.get.mockResolvedValueOnce({
-      data: { content: [{ id: "MLB123456", type: "ITEM", position: 1 }] },
-    }).mockResolvedValueOnce({
-      data: {
-        id: "MLB123456",
-        title: "Monitor Gamer LG UltraGear 24 IPS 180Hz",
-        price: 779,
-        original_price: 999,
-        permalink: "https://www.mercadolivre.com.br/monitor/p/MLB123456",
-        secure_thumbnail: "https://http2.mlstatic.com/monitor.jpg",
-        available_quantity: 12,
-        condition: "new",
-        status: "active",
-      },
-    });
-
-    const deals = await new MercadoLivreApiProvider(oauth, ["MLB99245"]).getDeals();
-
-    expect(oauth.getAccessToken).toHaveBeenCalledOnce();
-    expect(axiosMocks.get).toHaveBeenNthCalledWith(1, "/highlights/MLB/category/MLB99245", {
-      headers: { Authorization: "Bearer access-token" },
-    });
-    expect(axiosMocks.get).toHaveBeenNthCalledWith(2, "/items/MLB123456", {
-      headers: { Authorization: "Bearer access-token" },
-    });
-    expect(deals[0]).toMatchObject({
-      id: "mercado-livre:MLB123456",
-      currentPrice: 779,
-      previousPrice: 999,
-    });
-  });
-
-  it("rejeita resposta vazia da API oficial do Mercado Livre", async () => {
-    const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
-    axiosMocks.get.mockResolvedValue({ data: { content: [] } });
-
-    await expect(new MercadoLivreApiProvider(oauth, ["MLB99245"]).getDeals())
-      .rejects.toThrow("nao retornou produtos");
-  });
-
-  it("usa diretamente a oferta vencedora de um produto de catalogo do Mercado Livre", async () => {
-    const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
-    axiosMocks.get.mockResolvedValueOnce({
-      data: { content: [{ id: "MLB24162817", type: "PRODUCT", position: 1 }] },
-    }).mockResolvedValueOnce({
-      data: {
-        id: "MLB24162817",
-        status: "active",
-        name: "Processador AMD Ryzen 7 5700X3D AM4",
-        permalink: "https://www.mercadolivre.com.br/processador-amd/p/MLB24162817",
-        pictures: [{ url: "https://http2.mlstatic.com/ryzen.jpg" }],
-        buy_box_winner: {
-          item_id: "MLB987654321",
-          price: 1299,
-          original_price: 1499,
-          available_quantity: 20,
-          condition: "new",
-        },
-      },
-    });
-
-    const deals = await new MercadoLivreApiProvider(oauth, ["MLB1693"]).getDeals();
-
-    expect(deals[0]).toMatchObject({
-      id: "mercado-livre:MLB987654321",
-      title: "Processador AMD Ryzen 7 5700X3D AM4",
-      currentPrice: 1299,
-      previousPrice: 1499,
-    });
-    expect(axiosMocks.get).toHaveBeenCalledTimes(2);
-  });
-
-  it("ignora USER_PRODUCT privado e aceita imagem por id no catalogo do Mercado Livre", async () => {
-    const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
-    axiosMocks.get.mockResolvedValueOnce({
-      data: { content: [
-        { id: "MLBU3013800008", type: "USER_PRODUCT", position: 1 },
-        { id: "MLB24162817", type: "PRODUCT", position: 2 },
-      ] },
-    }).mockResolvedValueOnce({
-      data: {
-        id: "MLB24162817",
-        status: "active",
-        name: "Processador AMD Ryzen 7 5700X3D AM4",
-        permalink: "https://www.mercadolivre.com.br/processador-amd/p/MLB24162817",
-        pictures: [{ id: "123456-MLB12345678901_012026" }],
-        buy_box_winner: {
-          item_id: "MLB987654321",
-          price: 1299,
-          available_quantity: 20,
-          condition: "new",
-        },
-      },
-    });
-
-    const deals = await new MercadoLivreApiProvider(oauth, ["MLB1693"]).getDeals();
-
-    expect(deals[0]?.imageUrl).toBe("https://http2.mlstatic.com/D_NQ_NP_123456-MLB12345678901_012026-F.jpg");
-    expect(axiosMocks.get).toHaveBeenCalledTimes(2);
-    expect(axiosMocks.get).not.toHaveBeenCalledWith(
-      "/user-products/MLBU3013800008",
-      expect.anything(),
-    );
-  });
-
-  it("resolve PRODUCT sem buy box pelo ranking publico do produto", async () => {
-    const oauth = { getAccessToken: vi.fn().mockResolvedValue("access-token") } as unknown as MercadoLivreOAuth;
-    axiosMocks.get.mockResolvedValueOnce({
-      data: { content: [{ id: "MLB24162817", type: "PRODUCT", position: 1 }] },
-    }).mockResolvedValueOnce({
-      data: {
-        id: "MLB24162817",
-        status: "active",
-        name: "Processador AMD Ryzen 7 5700X3D AM4",
-        permalink: "https://www.mercadolivre.com.br/processador-amd/p/MLB24162817",
-        pictures: [{ id: "123456-MLB12345678901_012026" }],
-        buy_box_winner: null,
-      },
-    }).mockResolvedValueOnce({
-      data: { content: [
-        { id: "MLBU3013800008", type: "USER_PRODUCT", position: 1 },
-        { id: "MLB765432100", type: "ITEM", position: 2 },
-      ] },
-    }).mockResolvedValueOnce({
-      data: {
-        id: "MLB765432100",
-        title: "Processador AMD Ryzen 7 5700X3D AM4",
-        price: 1299,
-        original_price: 1499,
-        permalink: "https://produto.mercadolivre.com.br/MLB-765432100",
-        secure_thumbnail: "https://http2.mlstatic.com/ryzen.jpg",
-        available_quantity: 20,
-        condition: "new",
-        status: "active",
-      },
-    });
-
-    const deals = await new MercadoLivreApiProvider(oauth, ["MLB1693"]).getDeals();
-
-    expect(deals[0]).toMatchObject({
-      id: "mercado-livre:MLB765432100",
-      currentPrice: 1299,
-      previousPrice: 1499,
-    });
-    expect(axiosMocks.get).toHaveBeenNthCalledWith(3, "/highlights/MLB/product/MLB24162817", {
-      headers: { Authorization: "Bearer access-token" },
-    });
-    expect(axiosMocks.get).toHaveBeenNthCalledWith(4, "/items/MLB765432100", {
-      headers: { Authorization: "Bearer access-token" },
-    });
   });
 
   it("extracts only quality Kabum deals", async () => {

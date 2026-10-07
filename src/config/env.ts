@@ -20,14 +20,6 @@ const envSchema = z.object({
   CHANNEL_ID: z.string().min(2),
   AMAZON_TAG: optionalString,
   ML_TAG: z.string().min(1),
-  ML_CLIENT_ID: optionalString,
-  ML_CLIENT_SECRET: optionalString,
-  ML_REDIRECT_URI: optionalUrl,
-  RENDER_EXTERNAL_URL: optionalUrl,
-  RENDER_EXTERNAL_HOSTNAME: optionalString,
-  ML_API_CATEGORY_IDS: z.string().default(
-    "MLB1693,MLB1694,MLB1658,MLB1692,MLB430916,MLB2676,MLB99245,MLB418047,MLB1713,MLB1714,MLB1664,MLB430802,MLB1672,MLB1652",
-  ),
   AMAZON_DEALS_URL: z.url().default("https://www.amazon.com.br/deals?node=16339926011"),
   ML_DEALS_URL: z
     .url()
@@ -68,13 +60,6 @@ const envSchema = z.object({
   UPSTASH_REDIS_REST_TOKEN: optionalString,
   PORT: z.coerce.number().int().positive().optional(),
 })
-  .refine(
-    (value) => Boolean(value.ML_CLIENT_ID) === Boolean(value.ML_CLIENT_SECRET),
-    {
-      message: "ML_CLIENT_ID e ML_CLIENT_SECRET devem ser informados juntos",
-      path: ["ML_CLIENT_ID"],
-    },
-  )
   .refine(
     (value) => !value.AMAZON_ENABLED || Boolean(value.AMAZON_TAG),
     {
