@@ -83,7 +83,7 @@ export class MercadoLivreOAuth {
 
   async getAccessToken(): Promise<string> {
     const token = await this.loadToken();
-    if (!token) throw new Error("Mercado Livre ainda nao foi autorizado. Abra /oauth/mercadolivre/start.");
+    if (!token) throw new Error("Mercado Livre ainda nao foi autorizado. Use /autorizar_meli no chat privado do bot.");
     if (token.expiresAt > Date.now() + 5 * 60_000) return token.accessToken;
 
     const form = new URLSearchParams({
