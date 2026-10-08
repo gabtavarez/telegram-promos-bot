@@ -35,14 +35,9 @@ export class MercadoLivreProvider implements AffiliateProvider {
   constructor(private readonly dealsUrl: string) {}
 
   async getDeals(): Promise<Deal[]> {
-    const { data } = await http.get<string>(this.dealsUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.7,en;q=0.6",
-        "Cache-Control": "no-cache",
-      },
-    });
+    // Mantem o mesmo perfil de requisicao simples usado antes dos experimentos
+    // com OAuth/API e sem simular um navegador de datacenter.
+    const { data } = await http.get<string>(this.dealsUrl);
     assertPublicPage(data);
 
     const candidates = extractCandidates(data);
