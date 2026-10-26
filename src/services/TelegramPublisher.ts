@@ -9,6 +9,13 @@ import type {
 import { getVerifiedDiscount } from "../utils/price.js";
 import type { Coupon } from "../coupons/CouponProvider.js";
 
+// Legendas de foto aceitam ate 1024 caracteres; titulos enormes fariam o envio cair para texto.
+const MAX_TITLE_LENGTH = 200;
+
+function truncate(value: string, max: number): string {
+  return value.length <= max ? value : `${value.slice(0, max - 1).trimEnd()}…`;
+}
+
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 export class TelegramPublisher {
@@ -18,13 +25,44 @@ export class TelegramPublisher {
     this.bot = new Bot(token);
   }
 
+  private botUsername?: string;
+
+  private async getBotUsername(): Promise<string | undefined> {
+    if (this.botUsername) return this.botUsername;
+    try {
+      this.botUsername = (await this.bot.api.getMe()).username;
+    } catch {
+      // Sem username a publicacao segue normalmente, apenas sem o convite para os alertas.
+    }
+    return this.botUsername;
+  }
+
+  private async buildCaption(deal: Deal, affiliateUrl: string, status: PublishedOfferStatus = "active"): Promise<string> {
+    const caption = formatCaption(deal, affiliateUrl, status);
+    if (status === "soldout") return caption;
+    const username = await this.getBotUsername();
+    const footer = username ? `\n🔔 Alerta de preço grátis: https://t.me/${username}` : "";
+    return caption.length + footer.length <= 1000 ? caption + footer : caption;
+  }
+
+  private async buildKeyboard(affiliateUrl: string, status: PublishedOfferStatus = "active"): Promise<InlineKeyboard> {
+    const keyboard = new InlineKeyboard();
+    if (status === "soldout") return keyboard;
+    keyboard.url("🛒 VER OFERTA", affiliateUrl);
+    const username = await this.getBotUsername();
+    if (username) keyboard.row().url("🔔 Criar alerta de preço", `https://t.me/${username}?start=alerta`);
+    return keyboard;
+  }
+
   async publish(deal: Deal, affiliateUrl: string): Promise<PublishedMessageReference> {
     const feedbackKey = getFeedbackKey(deal.id);
-    const caption = formatCaption(deal, affiliateUrl);
+    const caption = await this.buildCaption(deal, affiliateUrl);
+    const keyboard = await this.buildKeyboard(affiliateUrl);
     try {
       const message = await this.bot.api.sendPhoto(this.channelId, deal.imageUrl, {
         caption,
         parse_mode: "HTML",
+        reply_markup: keyboard,
       });
       return { messageId: message.message_id, messageType: "photo", feedbackKey };
     } catch (error) {
@@ -32,14 +70,15 @@ export class TelegramPublisher {
       const message = await this.bot.api.sendMessage(this.channelId, caption, {
         parse_mode: "HTML",
         link_preview_options: { is_disabled: false },
+        reply_markup: keyboard,
       });
       return { messageId: message.message_id, messageType: "text", feedbackKey };
     }
   }
 
   async editPublishedOffer(offer: PublishedOffer): Promise<void> {
-    const caption = formatCaption(offer.deal, offer.affiliateUrl, offer.status);
-    const emptyKeyboard = new InlineKeyboard();
+    const caption = await this.buildCaption(offer.deal, offer.affiliateUrl, offer.status);
+    const emptyKeyboard = await this.buildKeyboard(offer.affiliateUrl, offer.status);
     if (offer.messageType === "photo") {
       await this.bot.api.editMessageCaption(this.channelId, offer.messageId, {
         caption,
@@ -122,6 +161,10 @@ export function formatCaption(
 ): string {
   const verifiedDiscount = getVerifiedDiscount(deal);
   const discount = verifiedDiscount ? ` (-${verifiedDiscount}%)` : "";
+  const header = verifiedDiscount ? getDiscountHeader(verifiedDiscount) : undefined;
+  const previousPrice = verifiedDiscount && deal.previousPrice
+    ? `De <s>${currency.format(deal.previousPrice)}</s> por:`
+    : undefined;
   const primaryPrice = deal.pixPrice
     ? `🔥 <b>${currency.format(deal.pixPrice)} no Pix${discount}</b>`
     : `🔥 <b>${currency.format(deal.currentPrice)}${discount}</b>`;
@@ -130,7 +173,14 @@ export function formatCaption(
     : undefined;
   const category = getCategoryHashtag(deal.title);
   const store = getStoreHashtag(deal.provider);
-  const coupon = deal.couponCode ? ["", `🎟️ Cupom: <code>${escapeHtml(deal.couponCode)}</code>`] : [];
+  const couponEnds = deal.couponEndsAt ? new Date(deal.couponEndsAt) : undefined;
+  const coupon = deal.couponCode
+    ? [
+        "",
+        `🎟️ Cupom: <code>${escapeHtml(deal.couponCode)}</code> (toque para copiar)`,
+        couponEnds && !Number.isNaN(couponEnds.getTime()) ? `⏳ Cupom válido até ${formatCouponDate(couponEnds)}` : undefined,
+      ]
+    : [];
   const visibleUrl = affiliateUrl;
   const statusLine = status === "soldout"
     ? ["❌ <b>OFERTA ESGOTADA</b>", ""]
@@ -140,10 +190,12 @@ export function formatCaption(
 
   return [
     ...statusLine,
+    status === "active" ? header : undefined,
+    previousPrice,
     primaryPrice,
     secondaryPayment,
     "",
-    `<b>${escapeHtml(deal.title)}</b>`,
+    `<b>${escapeHtml(truncate(deal.title, MAX_TITLE_LENGTH))}</b>`,
     ...coupon,
     "",
     ...(status === "soldout" ? [] : ["✅ Link da Oferta:", escapeHtml(visibleUrl)]),
@@ -175,6 +227,13 @@ export function getStoreHashtag(provider: ProviderName): string {
 
 export function getFeedbackKey(dealId: string): string {
   return createHash("sha256").update(dealId).digest("hex").slice(0, 16);
+}
+
+function getDiscountHeader(discount: number): string | undefined {
+  if (discount >= 50) return "💥 <b>DESCONTO IMPERDÍVEL</b>";
+  if (discount > 30) return "🚀 <b>SUPER OFERTA</b>";
+  if (discount >= 15) return "✅ <b>OFERTA BOA</b>";
+  return undefined;
 }
 
 export function getDiscountHighlight(discountPercentage?: number): string {

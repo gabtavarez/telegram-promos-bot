@@ -1,4 +1,5 @@
-import { createServer } from "node:http";
+import { timingSafeEqual } from "node:crypto";
+import { createServer, type Server } from "node:http";
 import cron from "node-cron";
 import { env } from "./config/env.js";
 import type { AffiliateProvider } from "./providers/AffiliateProvider.js";
@@ -91,38 +92,45 @@ async function main(): Promise<void> {
     couponProvider,
   );
 
-  new TelegramAdminBot(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_ADMIN_USER_ID ?? "", job).start();
+  const adminBot = new TelegramAdminBot(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_ADMIN_USER_ID ?? "", job);
+  adminBot.start();
   if (!env.TELEGRAM_ADMIN_USER_ID) {
     console.log("Comandos administrativos desativados; alertas publicos continuam ativos.");
   }
 
-  startHttpServer(env.PORT, () => job.run(), () => job.testSend(), env.RUN_NOW_TOKEN);
-  cron.schedule("0 20 * * *", () => {
-    void job.publishDailySummary().catch((error) => console.error("Falha ao publicar resumo diario.", error));
-  }, { timezone: "America/Sao_Paulo" });
+  const server = startHttpServer(env.PORT, job, env.RUN_NOW_TOKEN);
 
-  const defaultIntervalMs = 5 * 60 * 1_000;
-  let nextRunAt = Date.now() + defaultIntervalMs;
-  if (env.CRON_SCHEDULE) {
-    if (!cron.validate(env.CRON_SCHEDULE)) throw new Error(`CRON_SCHEDULE invalido: ${env.CRON_SCHEDULE}`);
-    cron.schedule(env.CRON_SCHEDULE, () => {
-      void job.run().catch((error) => console.error("Ciclo de ofertas falhou.", error));
-    });
-    console.log(`Bot iniciado. Ofertas serao verificadas pelo cron: ${env.CRON_SCHEDULE}.`);
-  } else {
-    cron.schedule("* * * * *", () => {
-      const now = Date.now();
-      if (now < nextRunAt) return;
-      nextRunAt = now + defaultIntervalMs;
-      void job.run().catch((error) => console.error("Ciclo de ofertas falhou.", error));
-    });
-    console.log("Bot iniciado. Ofertas serao verificadas a cada 5 minutos.");
-  }
+  const runCycle = () => {
+    void job.run().catch((error) => console.error("Ciclo de ofertas falhou.", error));
+  };
+  const schedule = env.CRON_SCHEDULE ?? "*/5 * * * *";
+  if (!cron.validate(schedule)) throw new Error(`CRON_SCHEDULE invalido: ${schedule}`);
+  if (!cron.validate(env.DAILY_SUMMARY_CRON)) throw new Error(`DAILY_SUMMARY_CRON invalido: ${env.DAILY_SUMMARY_CRON}`);
 
-  if (env.RUN_ON_START) {
-    await job.run();
-    nextRunAt = Date.now() + defaultIntervalMs;
+  const tasks = [cron.schedule(schedule, runCycle, { timezone: env.TIMEZONE })];
+  if (env.DAILY_SUMMARY_ENABLED) {
+    tasks.push(cron.schedule(env.DAILY_SUMMARY_CRON, () => {
+      void job.publishDailySummary().catch((error) => console.error("Falha ao publicar resumo diario.", error));
+    }, { timezone: env.TIMEZONE }));
   }
+  console.log(`Bot iniciado. Ofertas serao verificadas pelo cron: ${schedule} (${env.TIMEZONE}).`);
+
+  // Primeiro ciclo sem bloquear a inicializacao; o lock do job evita sobreposicao com o cron.
+  if (env.RUN_ON_START) runCycle();
+
+  let shuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`${signal} recebido; encerrando o bot...`);
+    for (const task of tasks) task.stop();
+    adminBot.stop();
+    server?.close();
+    // Ciclos em andamento sao interrompidos; o historico ja reservado impede duplicacao.
+    setTimeout(() => process.exit(0), 3_000).unref();
+  };
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
 }
 
 function parseAdvertiserIds(value?: string): number[] | undefined {
@@ -134,47 +142,49 @@ function parseAdvertiserIds(value?: string): number[] | undefined {
   return ids.length ? ids : undefined;
 }
 
-function startHttpServer(
-  port: number | undefined,
-  runNow: () => Promise<unknown>,
-  testSend: () => Promise<void>,
-  runNowToken?: string,
-): void {
-  if (!port) return;
-  createServer((request, response) => {
+function isValidToken(provided: string | null, expected?: string): boolean {
+  if (!expected || !provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function startHttpServer(port: number | undefined, job: DealsJob, runNowToken?: string): Server | undefined {
+  if (!port) return undefined;
+  const send = (response: import("node:http").ServerResponse, status: number, body: unknown) => {
+    response.writeHead(status, { "content-type": "application/json" });
+    response.end(JSON.stringify(body));
+  };
+  const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname === "/health") {
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end('{"status":"ok"}');
+      const status = job.getStatus();
+      send(response, 200, {
+        status: "ok",
+        paused: status.paused,
+        running: status.running,
+        lastRunAt: status.lastRunAt?.toISOString() ?? null,
+        lastPublishedAt: status.lastPublishedAt?.toISOString() ?? null,
+      });
       return;
     }
-    if (url.pathname === "/run-now") {
-      if (!runNowToken || url.searchParams.get("token") !== runNowToken) {
-        response.writeHead(401, { "content-type": "application/json" });
-        response.end('{"error":"unauthorized"}');
+    if (url.pathname === "/run-now" || url.pathname === "/test-send") {
+      if (!isValidToken(url.searchParams.get("token"), runNowToken)) {
+        send(response, 401, { error: "unauthorized" });
         return;
       }
-
-      response.writeHead(202, { "content-type": "application/json" });
-      response.end('{"status":"started"}');
-      void runNow().catch((error) => console.error("Execucao manual falhou.", error));
-      return;
-    }
-    if (url.pathname === "/test-send") {
-      if (!runNowToken || url.searchParams.get("token") !== runNowToken) {
-        response.writeHead(401, { "content-type": "application/json" });
-        response.end('{"error":"unauthorized"}');
-        return;
-      }
-
-      response.writeHead(202, { "content-type": "application/json" });
-      response.end('{"status":"started"}');
-      void testSend().catch((error) => console.error("Envio de teste falhou.", error));
+      send(response, 202, { status: "started" });
+      const task = url.pathname === "/run-now" ? job.run() : job.testSend();
+      void task.catch((error) => console.error("Execucao manual falhou.", error));
       return;
     }
     response.writeHead(404).end();
-  }).listen(port, "0.0.0.0", () => console.log(`HTTP ativo na porta ${port}.`));
+  });
+  server.listen(port, "0.0.0.0", () => console.log(`HTTP ativo na porta ${port}.`));
+  return server;
 }
+
+process.on("unhandledRejection", (reason) => console.error("Promise rejeitada sem tratamento.", reason));
 
 main().catch((error) => {
   console.error("Nao foi possivel iniciar o bot.", error);

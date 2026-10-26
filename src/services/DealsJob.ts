@@ -13,6 +13,10 @@ import { checkDealAvailability, isDealAvailable } from "./DealAvailabilityChecke
 import { enrichDealPayment } from "./DealPaymentEnricher.js";
 import { getVerifiedDiscount, normalizeDealPricing } from "../utils/price.js";
 import { safeErrorMessage } from "../utils/safeError.js";
+import { withTimeout } from "../utils/timeout.js";
+import { isRecentRepeat } from "../utils/similarity.js";
+
+const PROVIDER_TIMEOUT_MS = 120_000;
 
 export class DealsJob {
   private running = false;
@@ -23,7 +27,6 @@ export class DealsJob {
   private readonly recentProviders: ProviderName[] = [];
   private readonly recentCategories: string[] = [];
   private cycleCount = 0;
-  private legacyMessagesUpdated = false;
   private cycleProviderHealth: ProviderHealth[] = [];
 
   constructor(
@@ -46,32 +49,30 @@ export class DealsJob {
 
     this.running = true;
     try {
-      if (!this.legacyMessagesUpdated) {
-        try {
-          await this.updateLegacyMessages();
-          this.legacyMessagesUpdated = true;
-        } catch (error) {
-          console.warn("Nao foi possivel atualizar publicacoes antigas neste ciclo.", error);
-        }
-      }
       const discovered = await this.attachCoupons(await this.collectDeals());
       const qualityCandidates = discovered.filter(isQualityCandidate);
       const history = await this.recordPriceHistorySafely(qualityCandidates);
       const enriched = qualityCandidates.map((deal) => withPriceHistory(deal, history.get(deal.id)));
       const qualifiedDeals = enriched.filter(isPromotableDeal);
-      const available = await this.store.filterUnposted(qualifiedDeals);
+      const unposted = await this.store.filterUnposted(qualifiedDeals);
+      const available = await this.excludeRecentRepeats(unposted);
       console.log(
         `Filtro final: ${qualityCandidates.length} produto(s) de qualidade; ` +
           `${qualifiedDeals.length} promo(s) media(s)/boa(s); ` +
-          `${available.length} nova(s) apos o historico de 12h.`,
+          `${unposted.length} nova(s) apos o historico de 12h; ` +
+          `${available.length} sem repeticao do mesmo produto nas ultimas 48h.`,
       );
       logProviderAvailability(qualifiedDeals, available);
       await this.persistProviderHealth(qualityCandidates, qualifiedDeals, available);
       await this.publishNewCouponsSafely();
 
-      await this.notifyAlerts(qualifiedDeals);
+      await this.notifyAlerts(qualifiedDeals).catch((error) =>
+        console.warn("Falha ao processar alertas neste ciclo.", error));
       this.cycleCount += 1;
-      if (this.cycleCount % 6 === 0) await this.monitorPublishedOffers(enriched);
+      if (this.cycleCount % 6 === 0) {
+        await this.monitorPublishedOffers(enriched).catch((error) =>
+          console.warn("Falha ao monitorar ofertas publicadas neste ciclo.", error));
+      }
 
       const best = await selectFirstAvailableDeal(available, this.recentProviders, this.recentCategories);
       if (!best) {
@@ -248,7 +249,7 @@ export class DealsJob {
       const startedAt = Date.now();
       const attemptedAt = new Date().toISOString();
       try {
-        const providerDeals = await provider.getDeals();
+        const providerDeals = await withTimeout(provider.getDeals(), PROVIDER_TIMEOUT_MS, `Consulta ${provider.name}`);
         deals.push(...providerDeals.map(normalizeDealPricing));
         const providerError = provider.getLastError?.();
         this.cycleProviderHealth.push({
@@ -330,14 +331,35 @@ export class DealsJob {
       ? { ...deal, couponCode: undefined, couponEndsAt: undefined, couponVerified: undefined }
       : deal;
     if (!this.couponProvider) return withoutExpiredCoupon;
-    const coupons = await this.couponProvider.getActiveCoupons();
+    const coupons = await this.loadCouponsSafely();
     const coupon = findCouponForDeal(withoutExpiredCoupon, coupons);
     return coupon ? applyCoupon(withoutExpiredCoupon, coupon) : withoutExpiredCoupon;
   }
 
+  /** Remove ofertas do mesmo produto ja publicadas recentemente, salvo queda relevante de preco. */
+  private async excludeRecentRepeats(deals: Deal[]): Promise<Deal[]> {
+    if (deals.length === 0) return deals;
+    try {
+      const recent = await this.store.getPublishedOffers(60);
+      return deals.filter((deal) => !isRecentRepeat(deal, recent));
+    } catch (error) {
+      console.warn("Nao foi possivel checar repeticoes recentes; seguindo sem o filtro.", error);
+      return deals;
+    }
+  }
+
+  private async loadCouponsSafely(): Promise<Coupon[]> {
+    try {
+      return (await this.couponProvider?.getActiveCoupons()) ?? [];
+    } catch (error) {
+      console.warn("Nao foi possivel consultar cupons; seguindo sem cupons.", error);
+      return [];
+    }
+  }
+
   private async attachCoupons(deals: Deal[]): Promise<Deal[]> {
     if (!this.couponProvider) return deals;
-    const coupons = await this.couponProvider.getActiveCoupons();
+    const coupons = await this.loadCouponsSafely();
     if (coupons.length === 0) return deals;
     return deals.map((deal) => {
       if (deal.couponCode && (!deal.couponEndsAt || Date.parse(deal.couponEndsAt) > Date.now())) return deal;
@@ -450,18 +472,6 @@ export class DealsJob {
     await this.store.updatePublishedOffer(updated);
   }
 
-  private async updateLegacyMessages(): Promise<void> {
-    const offers = (await this.store.getPublishedOffers(20)).slice(0, 20);
-    for (let index = 0; index < offers.length; index += 4) {
-      await Promise.all(offers.slice(index, index + 4).map((offer) =>
-        this.publisher.editPublishedOffer(offer).catch(() => undefined),
-      ));
-    }
-    if (offers.length > 0) {
-      console.log(`${offers.length} publicacao(oes) recente(s) atualizada(s) para o formato sem score.`);
-    }
-  }
-
   async getProviderHealth(): Promise<ProviderHealth[]> {
     return this.store.getProviderHealth();
   }
@@ -564,7 +574,7 @@ export function getDealSelectionScore(
   const quality = Math.max(0, getHardwareQualityScore(deal.title));
   const discount = Math.min(getVerifiedDiscount(deal) ?? 0, 60);
   const historyBonus = Math.max(0, Math.min(deal.priceHistory?.percentBelow30DayAverage ?? 0, 20));
-  const couponBonus = deal.couponCode && deal.couponVerified ? 8 : 0;
+  const couponBonus = deal.couponCode && deal.couponVerified ? 12 : 0;
   const providerBonus = deal.provider === "kabum" ? 14 : 0;
   const categoryBonus = getCategorySelectionBonus(deal.title);
   const mostRecentPenalty = recentProviders[0] === deal.provider ? 20 : 0;

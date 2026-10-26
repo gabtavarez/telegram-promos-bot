@@ -2,7 +2,7 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 
 COPY tsconfig.json ./
 COPY src ./src
@@ -10,7 +10,8 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:22-alpine AS runner
 ENV NODE_ENV=production \
-    NODE_OPTIONS=--max-old-space-size=384
+    NODE_OPTIONS=--max-old-space-size=384 \
+    PORT=10000
 WORKDIR /app
 
 RUN addgroup -S bot && adduser -S bot -G bot && mkdir -p /app/data && chown -R bot:bot /app
@@ -20,4 +21,6 @@ COPY --from=builder --chown=bot:bot /app/dist ./dist
 
 USER bot
 EXPOSE 10000
+HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||10000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "dist/index.js"]

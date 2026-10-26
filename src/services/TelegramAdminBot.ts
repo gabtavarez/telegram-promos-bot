@@ -42,7 +42,22 @@ export class TelegramAdminBot {
     this.startPolling();
   }
 
+  stop(): void {
+    void this.bot.stop().catch(() => undefined);
+  }
+
   private registerHandlers(): void {
+    // Qualquer erro de comando vira uma resposta amigavel em vez de silencio.
+    this.bot.use(async (context, next) => {
+      try {
+        await next();
+      } catch (error) {
+        console.error("Falha ao executar comando.", error);
+        await context.reply("⚠️ Não foi possível concluir o comando agora. Tente novamente em instantes.")
+          .catch(() => undefined);
+      }
+    });
+
     this.bot.command("start", async (context) => {
       await context.reply([
         "👋 Bem-vindo ao bot do Tavarez Promos!",

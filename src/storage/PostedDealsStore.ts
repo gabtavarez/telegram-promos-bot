@@ -45,6 +45,7 @@ export class PostedDealsStore implements DealsStore {
   private readonly statePath: string;
   private records: PostedDeals = {};
   private state: LocalBotState = emptyState();
+  private writeTail: Promise<void> = Promise.resolve();
 
   constructor(filePath: string, private readonly retentionMs = 12 * 60 * 60 * 1_000) {
     this.filePath = resolve(filePath);
@@ -63,10 +64,14 @@ export class PostedDealsStore implements DealsStore {
       this.records = {};
     }
     try {
-      this.state = JSON.parse(await readFile(this.statePath, "utf8")) as LocalBotState;
-    } catch {
+      this.state = { ...emptyState(), ...(JSON.parse(await readFile(this.statePath, "utf8")) as Partial<LocalBotState>) };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        console.warn("Estado local invalido; iniciando um novo estado.", error);
+      }
       this.state = emptyState();
     }
+    this.pruneState();
     await this.prune();
   }
 
@@ -107,6 +112,7 @@ export class PostedDealsStore implements DealsStore {
 
   async savePublishedOffer(offer: PublishedOffer): Promise<void> {
     this.state.published = [offer, ...this.state.published.filter((item) => item.messageId !== offer.messageId)].slice(0, 100);
+    this.pruneState();
     await this.persistState();
   }
 
@@ -192,16 +198,40 @@ export class PostedDealsStore implements DealsStore {
     await this.persist();
   }
 
-  private async persist(): Promise<void> {
-    const temporaryPath = `${this.filePath}.tmp`;
-    await writeFile(temporaryPath, JSON.stringify(this.records, null, 2), "utf8");
-    await rename(temporaryPath, this.filePath);
+  /** Evita que alertas, votos e resumos cresçam para sempre. */
+  private pruneState(now = Date.now()): void {
+    const weekAgo = now - 7 * 24 * 60 * 60 * 1_000;
+    this.state.alertNotifications = Object.fromEntries(
+      Object.entries(this.state.alertNotifications).filter(([, at]) => Date.parse(at) >= weekAgo),
+    );
+    this.state.summaries = this.state.summaries.slice(-30);
+    const publishedKeys = new Set(this.state.published.map((offer) => offer.feedbackKey));
+    this.state.feedback = Object.fromEntries(
+      Object.entries(this.state.feedback).filter(([key]) => publishedKeys.has(key)),
+    );
   }
 
-  private async persistState(): Promise<void> {
-    const temporaryPath = `${this.statePath}.tmp`;
-    await writeFile(temporaryPath, JSON.stringify(this.state), "utf8");
-    await rename(temporaryPath, this.statePath);
+  // Escritas serializadas: duas gravacoes simultaneas no mesmo .tmp quebrariam o rename.
+  private persist(): Promise<void> {
+    return this.enqueueWrite(async () => {
+      const temporaryPath = `${this.filePath}.tmp`;
+      await writeFile(temporaryPath, JSON.stringify(this.records, null, 2), "utf8");
+      await rename(temporaryPath, this.filePath);
+    });
+  }
+
+  private persistState(): Promise<void> {
+    return this.enqueueWrite(async () => {
+      const temporaryPath = `${this.statePath}.tmp`;
+      await writeFile(temporaryPath, JSON.stringify(this.state), "utf8");
+      await rename(temporaryPath, this.statePath);
+    });
+  }
+
+  private enqueueWrite(operation: () => Promise<void>): Promise<void> {
+    const result = this.writeTail.then(operation, operation);
+    this.writeTail = result.then(() => undefined, () => undefined);
+    return result;
   }
 }
 

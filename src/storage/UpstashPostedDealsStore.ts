@@ -220,8 +220,20 @@ export class UpstashPostedDealsStore implements DealsStore {
     });
   }
 
-  private async command<T>(command: Array<string | number>): Promise<T> {
-    const { data } = await this.client.post<UpstashResponse<T>>("/", command);
+  private async command<T>(command: Array<string | number>, attempt = 1): Promise<T> {
+    let data: UpstashResponse<T>;
+    try {
+      ({ data } = await this.client.post<UpstashResponse<T>>("/", command));
+    } catch (error) {
+      // Falhas transitorias de rede/5xx/429 nao devem derrubar o ciclo inteiro.
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      const transient = axios.isAxiosError(error) && (!status || status === 429 || status >= 500);
+      if (transient && command[0] !== "EVAL" && attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        return this.command<T>(command, attempt + 1);
+      }
+      throw error;
+    }
     if (data.error) throw new Error(`Upstash Redis: ${data.error}`);
     if (data.result === undefined) throw new Error("Resposta invalida do Upstash Redis.");
     return data.result;
