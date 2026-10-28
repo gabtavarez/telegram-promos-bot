@@ -220,6 +220,11 @@ export class UpstashPostedDealsStore implements DealsStore {
     });
   }
 
+  async getConfig(): Promise<unknown> {
+    const value = await this.command<string | null>(["GET", configKey()]);
+    return parseJson<unknown>(value, undefined);
+  }
+
   private async command<T>(command: Array<string | number>, attempt = 1): Promise<T> {
     let data: UpstashResponse<T>;
     try {
@@ -278,6 +283,10 @@ function feedbackRedisKey(feedbackKey: string): string {
 
 function summaryKey(date: string): string {
   return `telegram-promos:summary:${date}`;
+}
+
+function configKey(): string {
+  return "telegram-promos:config";
 }
 
 function providerHealthKey(): string {

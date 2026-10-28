@@ -28,4 +28,6 @@ export interface DealsStore {
   saveProviderHealth(health: ProviderHealth[]): Promise<void>;
   getProviderHealth(): Promise<ProviderHealth[]>;
   syncActiveCouponKeys(keys: string[]): Promise<string[]>;
+  /** Configuracao editada pelo painel web (opcional: so o Upstash a persiste). */
+  getConfig?(): Promise<unknown>;
 }

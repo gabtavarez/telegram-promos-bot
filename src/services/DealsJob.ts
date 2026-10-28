@@ -15,6 +15,7 @@ import { getVerifiedDiscount, normalizeDealPricing } from "../utils/price.js";
 import { safeErrorMessage } from "../utils/safeError.js";
 import { withTimeout } from "../utils/timeout.js";
 import { isRecentRepeat } from "../utils/similarity.js";
+import { DEFAULT_BOT_CONFIG, parseBotConfig, type BotConfig } from "../config/botConfig.js";
 
 const PROVIDER_TIMEOUT_MS = 120_000;
 
@@ -28,6 +29,8 @@ export class DealsJob {
   private readonly recentCategories: string[] = [];
   private cycleCount = 0;
   private cycleProviderHealth: ProviderHealth[] = [];
+  private config: BotConfig = DEFAULT_BOT_CONFIG;
+  private configLoadedAt = 0;
 
   constructor(
     private readonly providers: AffiliateProvider[],
@@ -49,18 +52,25 @@ export class DealsJob {
 
     this.running = true;
     try {
-      const discovered = await this.attachCoupons(await this.collectDeals());
+      const cfg = await this.loadConfig();
+      if (cfg.bot.paused && !ignorePause) {
+        console.log("Bot pausado pelo painel; ciclo ignorado.");
+        return "paused";
+      }
+      const discovered = await this.attachCoupons(await this.collectDeals(cfg));
       const qualityCandidates = discovered.filter(isQualityCandidate);
       const history = await this.recordPriceHistorySafely(qualityCandidates);
       const enriched = qualityCandidates.map((deal) => withPriceHistory(deal, history.get(deal.id)));
       const qualifiedDeals = enriched.filter(isPromotableDeal);
       const unposted = await this.store.filterUnposted(qualifiedDeals);
-      const available = await this.excludeRecentRepeats(unposted);
+      const repeatFree = await this.excludeRecentRepeats(unposted, cfg);
+      const available = applyConfigFilters(repeatFree, cfg.filters);
       console.log(
         `Filtro final: ${qualityCandidates.length} produto(s) de qualidade; ` +
           `${qualifiedDeals.length} promo(s) media(s)/boa(s); ` +
           `${unposted.length} nova(s) apos o historico de 12h; ` +
-          `${available.length} sem repeticao do mesmo produto nas ultimas 48h.`,
+          `${repeatFree.length} sem repeticao do mesmo produto; ` +
+          `${available.length} dentro dos filtros do painel.`,
       );
       logProviderAvailability(qualifiedDeals, available);
       await this.persistProviderHealth(qualityCandidates, qualifiedDeals, available);
@@ -73,6 +83,8 @@ export class DealsJob {
         await this.monitorPublishedOffers(enriched).catch((error) =>
           console.warn("Falha ao monitorar ofertas publicadas neste ciclo.", error));
       }
+
+      if (!ignorePause && (await this.isPublishBlocked(cfg))) return "limited";
 
       const best = await selectFirstAvailableDeal(available, this.recentProviders, this.recentCategories);
       if (!best) {
@@ -241,11 +253,13 @@ export class DealsJob {
     return true;
   }
 
-  private async collectDeals(): Promise<Deal[]> {
+  private async collectDeals(cfg: BotConfig = this.config): Promise<Deal[]> {
     const deals: Deal[] = [];
     const previous = new Map((await this.store.getProviderHealth().catch(() => [])).map((item) => [item.name, item]));
     this.cycleProviderHealth = [];
     for (const provider of this.providers) {
+      const storeKey = STORE_KEY_BY_NAME[provider.name];
+      if (storeKey && cfg.filters.stores[storeKey] === false) continue;
       const startedAt = Date.now();
       const attemptedAt = new Date().toISOString();
       try {
@@ -336,12 +350,55 @@ export class DealsJob {
     return coupon ? applyCoupon(withoutExpiredCoupon, coupon) : withoutExpiredCoupon;
   }
 
+  /** Le a configuracao do painel (cache de 30s); falhas mantem a ultima valida. */
+  private async loadConfig(): Promise<BotConfig> {
+    if (Date.now() - this.configLoadedAt < 30_000) return this.config;
+    try {
+      const raw = await this.store.getConfig?.();
+      this.config = parseBotConfig(raw);
+      this.configLoadedAt = Date.now();
+      this.publisher.setAdOptions(this.config.ad);
+    } catch (error) {
+      console.warn("Nao foi possivel ler a configuracao do painel; mantendo a anterior.", error);
+      this.configLoadedAt = Date.now() - 20_000;
+    }
+    return this.config;
+  }
+
+  /** Horario silencioso, limite diario e intervalo minimo entre publicacoes no canal. */
+  private async isPublishBlocked(cfg: BotConfig): Promise<boolean> {
+    const { quietHours, dailyLimit, minMinutesBetweenPosts } = cfg.bot;
+    const now = new Date();
+    if (quietHours.enabled && isWithinHours(saoPauloHour(now), quietHours.start, quietHours.end)) {
+      console.log("Horario silencioso ativo; nenhuma publicacao neste ciclo.");
+      return true;
+    }
+    if (dailyLimit === 0 && minMinutesBetweenPosts === 0) return false;
+    const offers = await this.store.getPublishedOffers(100);
+    if (dailyLimit > 0) {
+      const today = formatDateKey(now);
+      const postedToday = offers.filter((offer) => formatDateKey(new Date(offer.publishedAt)) === today).length;
+      if (postedToday >= dailyLimit) {
+        console.log(`Limite diario atingido (${postedToday}/${dailyLimit}).`);
+        return true;
+      }
+    }
+    const last = offers[0] ? Date.parse(offers[0].publishedAt) : 0;
+    if (minMinutesBetweenPosts > 0 && now.getTime() - last < minMinutesBetweenPosts * 60_000) {
+      console.log(`Intervalo minimo de ${minMinutesBetweenPosts} min entre publicacoes ainda nao passou.`);
+      return true;
+    }
+    return false;
+  }
+
   /** Remove ofertas do mesmo produto ja publicadas recentemente, salvo queda relevante de preco. */
-  private async excludeRecentRepeats(deals: Deal[]): Promise<Deal[]> {
+  private async excludeRecentRepeats(deals: Deal[], cfg: BotConfig): Promise<Deal[]> {
     if (deals.length === 0) return deals;
     try {
-      const recent = await this.store.getPublishedOffers(60);
-      return deals.filter((deal) => !isRecentRepeat(deal, recent));
+      const recent = await this.store.getPublishedOffers(100);
+      const windowMs = cfg.bot.repeatWindowHours * 60 * 60 * 1_000;
+      const drop = cfg.bot.repostPriceDropPercent / 100;
+      return deals.filter((deal) => !isRecentRepeat(deal, recent, Date.now(), windowMs, drop));
     } catch (error) {
       console.warn("Nao foi possivel checar repeticoes recentes; seguindo sem o filtro.", error);
       return deals;
@@ -493,7 +550,7 @@ export interface CouponIntegrationStatus {
   error?: string;
 }
 
-export type JobRunResult = "published" | "no-deal" | "already-running" | "paused";
+export type JobRunResult = "published" | "no-deal" | "already-running" | "paused" | "limited";
 
 export interface DealsJobStatus {
   paused: boolean;
@@ -527,6 +584,30 @@ async function selectFirstAvailableDeal(
     if (await isDealAvailable(deal)) return deal;
   }
   return undefined;
+}
+
+export function applyConfigFilters(deals: Deal[], filters: BotConfig["filters"]): Deal[] {
+  const required = filters.requiredKeywords.map(normalizeSearch);
+  const blocked = filters.blockedKeywords.map(normalizeSearch);
+  return deals.filter((deal) => {
+    if (filters.stores[deal.provider] === false) return false;
+    if (filters.minDiscount > 0 && (getVerifiedDiscount(deal) ?? 0) < filters.minDiscount) return false;
+    if (filters.minPrice > 0 && deal.currentPrice < filters.minPrice) return false;
+    if (filters.maxPrice > 0 && deal.currentPrice > filters.maxPrice) return false;
+    if (filters.onlyWithCoupon && !deal.couponCode) return false;
+    const title = normalizeSearch(deal.title);
+    if (blocked.some((word) => title.includes(word))) return false;
+    return required.length === 0 || required.some((word) => title.includes(word));
+  });
+}
+
+export function isWithinHours(hour: number, start: number, end: number): boolean {
+  if (start === end) return false;
+  return start < end ? hour >= start && hour < end : hour >= start || hour < end;
+}
+
+function saoPauloHour(date: Date): number {
+  return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", hourCycle: "h23" }).format(date));
 }
 
 export function isPromotableDeal(deal: Deal): boolean {
@@ -665,6 +746,14 @@ function logProviderAvailability(qualified: Deal[], available: Deal[]): void {
   });
   console.log(`Disponibilidade por loja: ${summary.join("; ")}.`);
 }
+
+const STORE_KEY_BY_NAME: Record<string, ProviderName> = {
+  Amazon: "amazon",
+  "Mercado Livre": "mercado-livre",
+  AliExpress: "aliexpress",
+  Kabum: "kabum",
+  Shopee: "shopee",
+};
 
 function providerName(provider: ProviderName): string {
   const names: Record<ProviderName, string> = {

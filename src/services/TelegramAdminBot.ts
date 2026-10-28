@@ -282,6 +282,7 @@ function runResultMessage(result: JobRunResult): string {
     "no-deal": "ℹ️ Nenhuma oferta nova disponível agora.",
     "already-running": "🔄 Já existe uma busca em andamento.",
     paused: "⏸️ O bot está pausado.",
+    limited: "⏳ Fora da janela de envio (horário silencioso, limite diário ou intervalo mínimo).",
   };
   return messages[result];
 }

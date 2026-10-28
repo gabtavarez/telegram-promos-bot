@@ -8,6 +8,7 @@ import type {
 } from "../types/BotState.js";
 import { getVerifiedDiscount } from "../utils/price.js";
 import type { Coupon } from "../coupons/CouponProvider.js";
+import { DEFAULT_BOT_CONFIG, type AdOptions } from "../config/botConfig.js";
 
 // Legendas de foto aceitam ate 1024 caracteres; titulos enormes fariam o envio cair para texto.
 const MAX_TITLE_LENGTH = 200;
@@ -26,6 +27,11 @@ export class TelegramPublisher {
   }
 
   private botUsername?: string;
+  private ad: AdOptions = DEFAULT_BOT_CONFIG.ad;
+
+  setAdOptions(options: AdOptions): void {
+    this.ad = options;
+  }
 
   private async getBotUsername(): Promise<string | undefined> {
     if (this.botUsername) return this.botUsername;
@@ -38,18 +44,22 @@ export class TelegramPublisher {
   }
 
   private async buildCaption(deal: Deal, affiliateUrl: string, status: PublishedOfferStatus = "active"): Promise<string> {
-    const caption = formatCaption(deal, affiliateUrl, status);
+    const caption = formatCaption(deal, affiliateUrl, status, this.ad);
     if (status === "soldout") return caption;
-    const username = await this.getBotUsername();
-    const footer = username ? `\n🔔 Alerta de preço grátis: https://t.me/${username}` : "";
+    const username = this.ad.showAlertFooter ? await this.getBotUsername() : undefined;
+    const extras = [
+      username ? `🔔 Alerta de preço grátis: https://t.me/${username}` : undefined,
+      this.ad.customFooter ? escapeHtml(this.ad.customFooter) : undefined,
+    ].filter((line): line is string => Boolean(line));
+    const footer = extras.length ? `\n${extras.join("\n")}` : "";
     return caption.length + footer.length <= 1000 ? caption + footer : caption;
   }
 
   private async buildKeyboard(affiliateUrl: string, status: PublishedOfferStatus = "active"): Promise<InlineKeyboard> {
     const keyboard = new InlineKeyboard();
-    if (status === "soldout") return keyboard;
-    keyboard.url("🛒 VER OFERTA", affiliateUrl);
-    const username = await this.getBotUsername();
+    if (status === "soldout" || !this.ad.showButtons) return keyboard;
+    keyboard.url(this.ad.ctaLabel, affiliateUrl);
+    const username = this.ad.showAlertFooter ? await this.getBotUsername() : undefined;
     if (username) keyboard.row().url("🔔 Criar alerta de preço", `https://t.me/${username}?start=alerta`);
     return keyboard;
   }
@@ -158,17 +168,19 @@ export function formatCaption(
   deal: Deal,
   affiliateUrl: string,
   status: PublishedOfferStatus = "active",
+  ad: AdOptions = DEFAULT_BOT_CONFIG.ad,
 ): string {
+  const compact = ad.template === "compacto";
   const verifiedDiscount = getVerifiedDiscount(deal);
   const discount = verifiedDiscount ? ` (-${verifiedDiscount}%)` : "";
-  const header = verifiedDiscount ? getDiscountHeader(verifiedDiscount) : undefined;
-  const previousPrice = verifiedDiscount && deal.previousPrice
+  const header = verifiedDiscount && ad.showHeader && !compact ? getDiscountHeader(verifiedDiscount) : undefined;
+  const previousPrice = ad.showOldPrice && !compact && verifiedDiscount && deal.previousPrice
     ? `De <s>${currency.format(deal.previousPrice)}</s> por:`
     : undefined;
   const primaryPrice = deal.pixPrice
     ? `🔥 <b>${currency.format(deal.pixPrice)} no Pix${discount}</b>`
     : `🔥 <b>${currency.format(deal.currentPrice)}${discount}</b>`;
-  const secondaryPayment = deal.pixPrice
+  const secondaryPayment = deal.pixPrice && !compact
     ? formatSecondaryPayment(deal)
     : undefined;
   const category = getCategoryHashtag(deal.title);
@@ -178,7 +190,7 @@ export function formatCaption(
     ? [
         "",
         `🎟️ Cupom: <code>${escapeHtml(deal.couponCode)}</code> (toque para copiar)`,
-        couponEnds && !Number.isNaN(couponEnds.getTime()) ? `⏳ Cupom válido até ${formatCouponDate(couponEnds)}` : undefined,
+        ad.showCouponExpiry && !compact && couponEnds && !Number.isNaN(couponEnds.getTime()) ? `⏳ Cupom válido até ${formatCouponDate(couponEnds)}` : undefined,
       ]
     : [];
   const visibleUrl = affiliateUrl;
@@ -200,7 +212,9 @@ export function formatCaption(
     "",
     ...(status === "soldout" ? [] : ["✅ Link da Oferta:", escapeHtml(visibleUrl)]),
     "",
-    `📢 ${store} ${category}`,
+    ad.showHashtags || ad.disclosure === "anuncio"
+      ? `📢 ${[ad.showHashtags ? store : undefined, ad.showHashtags ? category : undefined, ad.disclosure === "anuncio" ? "#Anúncio" : undefined].filter(Boolean).join(" ")}`
+      : undefined,
     status === "soldout"
       ? "ℹ️ Esta publicação foi atualizada automaticamente pelo bot."
       : undefined,
