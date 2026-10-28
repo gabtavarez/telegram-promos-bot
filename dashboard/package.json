@@ -1,0 +1,26 @@
+{
+  "name": "tavarez-promos-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Painel de metricas e configuracao do bot Tavarez Promos.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource-variable/sora": "^5.2.8",
+    "next": "^15.5.28",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.6",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.9.2"
+  },
+  "engines": { "node": ">=20" }
+}

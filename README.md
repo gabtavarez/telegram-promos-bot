@@ -69,3 +69,7 @@ Depois do deploy como Web Service, crie um monitor HTTP no UptimeRobot apontando
 ## Observações sobre scraping
 
 Os sites podem alterar HTML, seletores ou regras de acesso sem aviso. Os providers foram isolados justamente para permitir ajustes independentes. Respeite os termos de uso, o `robots.txt` e as regras dos programas de afiliados. O bot não tenta contornar CAPTCHA ou bloqueios.
+
+## Painel web
+
+A pasta [`dashboard/`](dashboard) tem o painel (Next.js) para a Vercel: métricas do canal e configuração do bot e dos anúncios. Veja o README dela.
