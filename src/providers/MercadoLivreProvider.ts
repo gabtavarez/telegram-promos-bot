@@ -37,13 +37,14 @@ export class MercadoLivreProvider implements AffiliateProvider {
   async getDeals(): Promise<Deal[]> {
     // Mantem o mesmo perfil de requisicao simples usado antes dos experimentos
     // com OAuth/API e sem simular um navegador de datacenter.
-    const { data } = await http.get<string>(this.dealsUrl);
+    const response = await http.get<string>(this.dealsUrl);
+    const data = response.data;
     assertPublicPage(data);
 
     const candidates = extractCandidates(data);
     if (candidates.length === 0) {
       throw new Error(
-        "Mercado Livre respondeu sem cards de ofertas nem dados estruturados reconheciveis na pagina publica.",
+        `Mercado Livre respondeu sem cards de ofertas nem dados estruturados reconheciveis na pagina publica. ${describeResponse(response.status, response.request?.res?.responseUrl, data)}`,
       );
     }
 
@@ -338,4 +339,13 @@ function extractBalancedJson(value: string, from: number): string | undefined {
 
 function candidateKey(candidate: Candidate): string {
   return `${candidate.url.split(/[?#]/)[0]}|${candidate.currentPrice}`;
+}
+
+/** Resumo curto da resposta para diagnostico (sem corpo completo nem dados sensiveis). */
+function describeResponse(status: number, finalUrl: string | undefined, html: string): string {
+  const title = /<title[^>]*>([^<]{0,120})/i.exec(html)?.[1]?.trim() ?? "sem <title>";
+  const hints = ["poly-card", "promotion-item", "ui-search", "__PRELOADED_STATE__", "__NEXT_DATA__", "application/ld+json", "captcha", "login"]
+    .filter((hint) => html.toLowerCase().includes(hint.toLowerCase()));
+  const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/gi, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+  return `[diagnostico: HTTP ${status}; url final=${finalUrl ?? "?"}; ${html.length} bytes; title="${title}"; marcadores=${hints.join(",") || "nenhum"}; texto="${text}"]`;
 }
