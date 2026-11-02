@@ -21,6 +21,8 @@ import { withTimeout } from "../utils/timeout.js";
 import { isRecentRepeat } from "../utils/similarity.js";
 import { DEFAULT_BOT_CONFIG, parseBotConfig, type BotConfig } from "../config/botConfig.js";
 
+const DIVERSITY_STALL_MS = 2 * 60 * 60 * 1_000;
+
 const PROVIDER_TIMEOUT_MS = 120_000;
 
 export class DealsJob {
@@ -120,12 +122,19 @@ export class DealsJob {
 
       const recentOffers = await this.store.getPublishedOffers(100).catch(() => []);
       const diversityCtx = buildDiversityContext(recentOffers);
-      const diverse = available.filter((deal) => {
+      let diverse = available.filter((deal) => {
         const assessment = assessments.get(deal.id);
         const block = diversityBlock(deal, assessment?.category ?? detectCategory(deal.title), assessment?.brand, diversityCtx, cfg.diversity);
         if (block) reject(block);
         return !block;
       });
+      // Valvula de seguranca: se os limites travaram tudo e o canal esta parado ha horas, vale so a
+      // penalidade suave de diversidade (a melhor oferta sai), para nao deixar o canal em silencio.
+      const lastPublishedMs = recentOffers[0] ? Date.parse(recentOffers[0].publishedAt) : 0;
+      if (diverse.length === 0 && available.length > 0 && Date.now() - lastPublishedMs >= DIVERSITY_STALL_MS) {
+        console.log(`Limites de diversidade liberados: nada publicado ha mais de ${DIVERSITY_STALL_MS / 3_600_000}h.`);
+        diverse = available;
+      }
       report.stages.diverse = diverse.length;
       for (const deal of diverse) {
         const name = providerName(deal.provider);
