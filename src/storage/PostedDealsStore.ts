@@ -8,6 +8,7 @@ import type {
   PriceHistoryStats,
   PublishedOffer,
   ProviderHealth,
+  CycleReport,
   UserAlert,
 } from "../types/BotState.js";
 import type { DealsStore } from "./DealsStore.js";
@@ -28,6 +29,7 @@ interface LocalBotState {
   feedback: Record<string, { votes: Record<string, FeedbackType> }>;
   summaries: string[];
   providerHealth?: ProviderHealth[];
+  cycleReports?: CycleReport[];
   activeCouponKeys?: string[];
 }
 
@@ -182,6 +184,11 @@ export class PostedDealsStore implements DealsStore {
 
   async getProviderHealth(): Promise<ProviderHealth[]> {
     return this.state.providerHealth ?? [];
+  }
+
+  async saveCycleReport(report: CycleReport): Promise<void> {
+    this.state.cycleReports = [report, ...(this.state.cycleReports ?? [])].slice(0, 48);
+    await this.persistState();
   }
 
   async syncActiveCouponKeys(keys: string[]): Promise<string[]> {

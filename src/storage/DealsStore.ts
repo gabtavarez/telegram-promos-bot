@@ -5,6 +5,7 @@ import type {
   PriceHistoryStats,
   PublishedOffer,
   ProviderHealth,
+  CycleReport,
   UserAlert,
 } from "../types/BotState.js";
 
@@ -30,4 +31,6 @@ export interface DealsStore {
   syncActiveCouponKeys(keys: string[]): Promise<string[]>;
   /** Configuracao editada pelo painel web (opcional: so o Upstash a persiste). */
   getConfig?(): Promise<unknown>;
+  /** Relatorio de cada ciclo (ultimos ~48), usado pelo painel. */
+  saveCycleReport?(report: CycleReport): Promise<void>;
 }

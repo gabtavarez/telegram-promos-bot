@@ -1,5 +1,6 @@
 import type { Deal } from "../types/Deal.js";
 import type { PublishedOffer } from "../types/BotState.js";
+import { detectBrand } from "../quality/brands.js";
 
 const STOPWORDS = new Set([
   "de", "da", "do", "com", "para", "e", "o", "a", "em", "um", "uma", "kit", "novo", "nova",
@@ -18,8 +19,12 @@ export function productTokens(title: string): string[] {
   )];
 }
 
-// Tokens de modelo (ex.: "g5", "5060", "165hz", "7800x3d") identificam o produto melhor que palavras comuns.
-const isModelToken = (token: string) => /\d/.test(token);
+// Especificacoes e sockets sao compartilhados por produtos diferentes (ex.: "360mm", "am5", "ddr5"):
+// nao identificam o modelo.
+const SPEC_TOKEN = /^(?:\d+(?:mm|hz|gb|tb|mb|w|ms|mhz|ghz|dpi|rpm|v|k|cm|kg|mah|gbps|pol)|ddr\d|am[345]|lga\d+|\d{4}|115x|2011|pcie\d?|usb\d?|\d)$/;
+
+// Tokens de modelo (ex.: "k551rgb", "7800x3d", "ak820") misturam letras e numeros e identificam o produto.
+const isModelToken = (token: string) => /\d/.test(token) && /[a-z]/.test(token) && !SPEC_TOKEN.test(token);
 
 export function isSameProduct(titleA: string, titleB: string): boolean {
   const a = productTokens(titleA);
@@ -29,7 +34,11 @@ export function isSameProduct(titleA: string, titleB: string): boolean {
   const shared = a.filter((token) => setB.has(token));
   const jaccard = shared.length / (a.length + b.length - shared.length);
   const sharedModels = shared.filter(isModelToken).length;
-  return jaccard >= 0.7 || (sharedModels >= 2 && jaccard >= 0.5);
+  // Marcas conhecidas diferentes nunca sao o mesmo produto, por mais parecidos que sejam os titulos.
+  const brandA = detectBrand(titleA);
+  const brandB = detectBrand(titleB);
+  if (brandA.known && brandB.known && brandA.brand !== brandB.brand) return false;
+  return jaccard >= 0.75 || (sharedModels >= 1 && jaccard >= 0.5);
 }
 
 /**

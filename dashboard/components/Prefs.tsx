@@ -13,6 +13,8 @@ export const ACCENTS = [
 
 export const WIDGETS = [
   { id: "timeline", label: "Ofertas ao longo do tempo" },
+  { id: "funnel", label: "Funil do último ciclo" },
+  { id: "rejections", label: "Por que ofertas foram barradas" },
   { id: "stores", label: "Ofertas por loja" },
   { id: "categories", label: "Ofertas por categoria" },
   { id: "discounts", label: "Faixas de desconto" },

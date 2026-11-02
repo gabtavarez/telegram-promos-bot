@@ -29,10 +29,12 @@ const PURCHASE_MARKERS = [
 
 export async function isDealAvailable(deal: Deal): Promise<boolean> {
   const result = await checkDealAvailability(deal);
+  // "blocked": a loja recusou a nossa checagem (ex.: 403 para IP de servidor). O feed oficial da Awin
+  // ja exclui itens indisponiveis, entao a oferta da Kabum segue; paginas lidas sem sinal de compra nao.
   return result !== "unavailable" && !(result === "unknown" && deal.provider === "kabum");
 }
 
-export type DealAvailability = "available" | "unavailable" | "unknown";
+export type DealAvailability = "available" | "unavailable" | "unknown" | "blocked";
 
 export async function checkDealAvailability(deal: Deal): Promise<DealAvailability> {
 
@@ -57,7 +59,8 @@ export async function checkDealAvailability(deal: Deal): Promise<DealAvailabilit
     if (deal.provider === "kabum") {
       console.warn(`Nao foi possivel confirmar o estoque de "${deal.title}": ${message}`);
     }
-    return "unknown";
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    return status === 401 || status === 403 || status === 429 ? "blocked" : "unknown";
   }
 }
 

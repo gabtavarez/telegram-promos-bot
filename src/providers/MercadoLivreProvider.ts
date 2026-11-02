@@ -34,12 +34,25 @@ export class MercadoLivreProvider implements AffiliateProvider {
 
   constructor(private readonly dealsUrl: string) {}
 
+  /** Apos um bloqueio, espera antes de tentar de novo para nao insistir contra o antibot. */
+  private blockedUntil = 0;
+
   async getDeals(): Promise<Deal[]> {
+    if (Date.now() < this.blockedUntil) {
+      throw new Error(
+        `Mercado Livre bloqueado (verificacao de seguranca); nova tentativa as ${new Date(this.blockedUntil).toISOString()}.`,
+      );
+    }
     // Mantem o mesmo perfil de requisicao simples usado antes dos experimentos
     // com OAuth/API e sem simular um navegador de datacenter.
     const response = await http.get<string>(this.dealsUrl);
     const data = response.data;
-    assertPublicPage(data);
+    try {
+      assertPublicPage(data);
+    } catch (error) {
+      this.blockedUntil = Date.now() + 30 * 60_000;
+      throw error;
+    }
 
     const candidates = extractCandidates(data);
     if (candidates.length === 0) {
@@ -218,9 +231,9 @@ function readFractionPrice(card: cheerio.Cheerio<AnyNode>, selectors: string[]):
 
 function assertPublicPage(html: string): void {
   const normalized = html.toLowerCase();
-  if (["suspicious-traffic-frontend", "account-verification", "registrationtype=negative_traffic", "para continuar, acesse<br/>sua conta"]
+  if (["suspicious-traffic-frontend", "account-verification", "registrationtype=negative_traffic", "para continuar, acesse<br/>sua conta", "/captcha/wall", "complete esta etapa"]
     .some((marker) => normalized.includes(marker))) {
-    throw new Error("Mercado Livre bloqueou a pagina publica com verificacao de trafego suspeito.");
+    throw new Error("Mercado Livre bloqueou a pagina publica com verificacao de trafego suspeito (CAPTCHA).");
   }
 }
 

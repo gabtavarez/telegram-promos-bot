@@ -9,12 +9,19 @@ import type {
 import { getVerifiedDiscount } from "../utils/price.js";
 import type { Coupon } from "../coupons/CouponProvider.js";
 import { DEFAULT_BOT_CONFIG, type AdOptions } from "../config/botConfig.js";
+import { cleanTitle } from "../utils/title.js";
 
-// Legendas de foto aceitam ate 1024 caracteres; titulos enormes fariam o envio cair para texto.
-const MAX_TITLE_LENGTH = 200;
+const STORE_NAMES: Record<ProviderName, string> = {
+  amazon: "Amazon",
+  "mercado-livre": "Mercado Livre",
+  aliexpress: "AliExpress",
+  kabum: "KaBuM!",
+  shopee: "Shopee",
+};
 
-function truncate(value: string, max: number): string {
-  return value.length <= max ? value : `${value.slice(0, max - 1).trimEnd()}…`;
+function storeLine(deal: Deal): string {
+  const rating = deal.rating !== undefined && deal.rating > 0 ? ` • ⭐ ${deal.rating.toFixed(1).replace(".", ",")}` : "";
+  return `🏪 ${STORE_NAMES[deal.provider]}${rating}`;
 }
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -207,7 +214,8 @@ export function formatCaption(
     primaryPrice,
     secondaryPayment,
     "",
-    `<b>${escapeHtml(truncate(deal.title, MAX_TITLE_LENGTH))}</b>`,
+    `<b>${escapeHtml(cleanTitle(deal.title, ad.titleMaxLength))}</b>`,
+    ad.showStoreLine && !compact ? storeLine(deal) : undefined,
     ...coupon,
     "",
     ...(status === "soldout" ? [] : ["✅ Link da Oferta:", escapeHtml(visibleUrl)]),

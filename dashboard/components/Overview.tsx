@@ -5,10 +5,10 @@ import { Columns, HBars, TimelineChart } from "./Charts";
 import { usePrefs, type WidgetId } from "./Prefs";
 import { SettingsSheet } from "./SettingsSheet";
 import { PERIODS, brl, brl0, categoryOf, countBy, discountBins, inPeriod, summarize, timeAgo, timeline, type Period } from "@/lib/metrics";
-import { STORE_LABEL, type HealthLite, type MetricsPayload, type OfferLite } from "@/lib/types";
+import { REJECT_LABEL, STORE_LABEL, type CycleLite, type HealthLite, type MetricsPayload, type OfferLite } from "@/lib/types";
 
 const SPAN: Record<WidgetId, string> = {
-  timeline: "", stores: "span-6", categories: "span-6", discounts: "span-5", health: "span-7", latest: "",
+  timeline: "", funnel: "span-6", rejections: "span-6", stores: "span-6", categories: "span-6", discounts: "span-5", health: "span-7", latest: "",
 };
 
 export function Overview() {
@@ -112,6 +112,20 @@ function WidgetBody({ id, offers, period, data }: { id: WidgetId; offers: OfferL
           {offers.length ? <TimelineChart buckets={timeline(offers, period)} /> : empty}
         </>
       );
+    case "funnel":
+      return (
+        <>
+          <Head id={id} title="Funil do último ciclo" note={data.cycles[0] ? timeAgo(data.cycles[0].at) : undefined} />
+          <Funnel cycle={data.cycles[0]} />
+        </>
+      );
+    case "rejections":
+      return (
+        <>
+          <Head id={id} title="Por que ofertas foram barradas" note="último ciclo" />
+          <Rejections cycle={data.cycles[0]} />
+        </>
+      );
     case "stores":
       return (
         <>
@@ -153,6 +167,49 @@ function WidgetBody({ id, offers, period, data }: { id: WidgetId; offers: OfferL
   }
 }
 
+const NO_CYCLE = <p className="empty">O funil aparece depois que o bot atualizado completar o primeiro ciclo.</p>;
+
+function Funnel({ cycle }: { cycle?: CycleLite }) {
+  if (!cycle) return NO_CYCLE;
+  const { stages } = cycle;
+  const rows = [
+    { label: "Recebidas das lojas", value: cycle.received },
+    { label: "Aprovadas na qualidade", value: stages.quality },
+    { label: "Com desconto relevante", value: stages.promotable },
+    { label: "Novas (sem repetir 12 h)", value: stages.fresh },
+    { label: "Sem produto repetido", value: stages.noRepeat },
+    { label: "Dentro dos seus filtros", value: stages.allowed },
+    { label: "Após limites de diversidade", value: stages.diverse },
+  ];
+  return (
+    <>
+      <HBars rows={rows} limit={rows.length} />
+      <p className="note" style={{ marginTop: 12 }}>
+        {cycle.published
+          ? <>Publicada neste ciclo: <strong>{cycle.published.title}</strong> ({cycle.published.provider}, {cycle.published.category}).</>
+          : "Nenhuma oferta publicada neste ciclo."}
+      </p>
+    </>
+  );
+}
+
+function Rejections({ cycle }: { cycle?: CycleLite }) {
+  if (!cycle) return NO_CYCLE;
+  const rows = Object.entries(cycle.rejected)
+    .filter(([, value]) => value > 0)
+    .map(([key, value]) => ({ label: REJECT_LABEL[key] ?? key, value }))
+    .sort((a, b) => b.value - a.value);
+  if (rows.length === 0) return <p className="empty">Nada foi barrado neste ciclo.</p>;
+  return (
+    <>
+      <HBars rows={rows} limit={8} />
+      <p className="note" style={{ marginTop: 12 }}>
+        Ajuste os filtros em <strong>Bot</strong> (qualidade, marcas, limites por categoria) se estiver barrando demais — ou de menos.
+      </p>
+    </>
+  );
+}
+
 function Health({ rows }: { rows: HealthLite[] }) {
   if (rows.length === 0) return <p className="empty">O diagnóstico aparece depois do primeiro ciclo de busca do bot.</p>;
   const now = Date.now();
@@ -167,7 +224,7 @@ function Health({ rows }: { rows: HealthLite[] }) {
             <div>
               <div className="name">{row.name}</div>
               <div className="detail">{row.received} recebidas · {row.qualityApproved} aprovadas · {row.promotable} em promoção · {row.newDeals} novas</div>
-              {row.error ? <div className="err">{row.error}</div> : null}
+              {row.error ? <div className="err">{friendlyError(row.error)}</div> : null}
             </div>
             <span className="when">{timeAgo(row.lastAttemptAt)}</span>
           </div>
@@ -203,4 +260,11 @@ function Offer({ offer }: { offer: OfferLite }) {
       </div>
     </div>
   );
+}
+
+function friendlyError(error: string): string {
+  if (/captcha|trafego suspeito|bloqueado/i.test(error)) {
+    return "Bloqueado pelo antibot da loja (CAPTCHA) para o IP do servidor. O bot espera 30 min entre tentativas; os cupons continuam funcionando.";
+  }
+  return error;
 }

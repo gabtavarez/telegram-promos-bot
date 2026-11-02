@@ -2,10 +2,18 @@ import { z } from "zod";
 
 /**
  * Contrato de configuracao editavel pelo painel web.
- * Copia de src/config/botConfig.ts do repositorio do bot; mantenha os dois identicos.
+ * Mantenha este arquivo identico a lib/botConfig.ts do repositorio do dashboard.
  */
 const hour = z.number().int().min(0).max(23);
 const keywords = z.array(z.string().trim().min(1).max(40)).max(40);
+
+/** Categorias de produto reconhecidas pelo bot (usadas em filtros e limites de diversidade). */
+export const CATEGORY_IDS = [
+  "gpu", "cpu", "placa-mae", "ram", "ssd", "fonte", "gabinete", "cooler", "monitor",
+  "teclado", "mouse", "audio", "cadeira", "setup", "celular", "notebook", "tv",
+] as const;
+export type CategoryId = (typeof CATEGORY_IDS)[number];
+const category = z.enum(CATEGORY_IDS);
 
 export const botConfigSchema = z.object({
   version: z.literal(1).default(1),
@@ -62,6 +70,8 @@ export const botConfigSchema = z.object({
     disclosure: z.enum(["none", "anuncio"]).default("none"),
     ctaLabel: z.string().trim().min(1).max(30).default("🛒 VER OFERTA"),
     customFooter: z.string().trim().max(120).default(""),
+    titleMaxLength: z.number().int().min(40).max(200).default(110),
+    showStoreLine: z.boolean().default(true),
   }).default({
     template: "completo",
     showHeader: true,
@@ -73,7 +83,39 @@ export const botConfigSchema = z.object({
     disclosure: "none",
     ctaLabel: "🛒 VER OFERTA",
     customFooter: "",
+    titleMaxLength: 110,
+    showStoreLine: true,
   }),
+  quality: z.object({
+    mode: z.enum(["rigoroso", "equilibrado", "amplo"]).default("equilibrado"),
+    /** Em categorias sensiveis, so passam marcas conhecidas (evita SSD/RAM/AIO "genericos"). */
+    requireKnownBrand: z.boolean().default(true),
+    strictCategories: z.array(category).default(["ram", "ssd", "fonte", "cooler", "gpu", "cpu", "placa-mae", "monitor"]),
+    blockAmbiguousTitles: z.boolean().default(true),
+    minRating: z.number().min(0).max(5).default(4.5),
+    minSales: z.number().int().min(0).max(100_000).default(30),
+    disabledCategories: z.array(category).default([]),
+    blockedBrands: keywords.default([]),
+    preferredBrands: keywords.default([]),
+  }).default({
+    mode: "equilibrado",
+    requireKnownBrand: true,
+    strictCategories: ["ram", "ssd", "fonte", "cooler", "gpu", "cpu", "placa-mae", "monitor"],
+    blockAmbiguousTitles: true,
+    minRating: 4.5,
+    minSales: 30,
+    disabledCategories: [],
+    blockedBrands: [],
+    preferredBrands: [],
+  }),
+  diversity: z.object({
+    /** Maximo de ofertas da mesma categoria nas ultimas 24h (0 = sem limite). */
+    maxPerCategoryPerDay: z.number().int().min(0).max(50).default(3),
+    /** Maximo de ofertas da mesma marca nas ultimas 24h (0 = sem limite). */
+    maxPerBrandPerDay: z.number().int().min(0).max(50).default(2),
+    /** Participacao maxima de uma loja nas ultimas 24h, em % (0 = sem limite). */
+    maxStoreSharePercent: z.number().int().min(0).max(100).default(60),
+  }).default({ maxPerCategoryPerDay: 3, maxPerBrandPerDay: 2, maxStoreSharePercent: 60 }),
 });
 
 export type BotConfig = z.infer<typeof botConfigSchema>;

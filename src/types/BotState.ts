@@ -50,3 +50,15 @@ export interface ProviderHealth {
   newDeals: number;
   error?: string;
 }
+
+/** Resumo de um ciclo de coleta/publicacao, exibido no painel (funil de qualidade). */
+export interface CycleReport {
+  at: string;
+  durationMs: number;
+  result: string;
+  received: number;
+  stages: { quality: number; promotable: number; fresh: number; noRepeat: number; allowed: number; diverse: number };
+  rejected: Record<string, number>;
+  byStore: Record<string, { received: number; passed: number }>;
+  published?: { title: string; provider: string; category: string; brand?: string; score: number };
+}

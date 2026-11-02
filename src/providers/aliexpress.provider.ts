@@ -6,7 +6,7 @@ import { calculateDiscount, parseBrlPrice } from "../utils/price.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
 
 const API_URL = "https://api-sg.aliexpress.com/sync";
-const PRODUCT_FIELDS = [
+const BASE_FIELDS = [
   "product_id",
   "product_title",
   "product_detail_url",
@@ -14,7 +14,11 @@ const PRODUCT_FIELDS = [
   "target_sale_price",
   "target_original_price",
   "promotion_link",
-].join(",");
+];
+// Reputacao do produto (nota e vendas) permite barrar anuncios sem historico; se a API recusar, volta ao basico.
+const EXTENDED_FIELDS = [...BASE_FIELDS, "evaluate_rate", "lastest_volume"];
+/** Palavras-chave em rotacao: cada ciclo consulta uma janela, ampliando a variedade sem estourar a cota da API. */
+const KEYWORDS_PER_CYCLE = 16;
 const HARDWARE_KEYWORDS = [
   "mechanical keyboard",
   "magnetic keyboard hall effect",
@@ -30,6 +34,31 @@ const HARDWARE_KEYWORDS = [
   "120mm ARGB PC fan",
   "140mm ARGB PC fan",
   "monitor arm gas spring VESA",
+  "Redragon mechanical keyboard",
+  "Akko keyboard",
+  "Keychron keyboard",
+  "Attack Shark mouse",
+  "Logitech G gaming mouse",
+  "Razer gaming mouse",
+  "HyperX gaming headset",
+  "Edifier gaming headset",
+  "Kingston Fury DDR5",
+  "Kingston Fury DDR4",
+  "ID-Cooling AIO",
+  "Arctic P12 fan",
+  "Lian Li fan",
+  "Fifine microphone",
+  "Corsair keyboard",
+  "Machenike keyboard",
+  "Ajazz wireless keyboard",
+  "VXE wireless mouse",
+  "Lamzu gaming mouse",
+  "Corsair Vengeance DDR5",
+  "Teamgroup T-Force DDR5",
+  "Thermalright AIO 360",
+  "Jonsbo AIO water cooler",
+  "Lian Li ARGB fan",
+  "monitor arm dual VESA",
 ];
 
 interface AliExpressConfig {
@@ -46,6 +75,8 @@ interface AliExpressProduct {
   target_sale_price?: string;
   target_original_price?: string;
   promotion_link?: string;
+  evaluate_rate?: string | number;
+  lastest_volume?: string | number;
 }
 
 interface ApiErrorResponse {
@@ -100,7 +131,7 @@ export class AliExpressProvider implements AffiliateProvider {
   async getDeals(): Promise<Deal[]> {
     try {
       const queryResults = await settleWithConcurrency(
-        HARDWARE_KEYWORDS,
+        this.nextKeywords(),
         4,
         (keyword) => this.queryProductsWithRetry(keyword),
       );
@@ -136,6 +167,8 @@ export class AliExpressProvider implements AffiliateProvider {
         const imageUrl = product.product_main_image_url;
         const currentPrice = parsePrice(product.target_sale_price);
         const originalPrice = parsePrice(product.target_original_price);
+        const rating = parseRate(product.evaluate_rate);
+        const sales = parseVolume(product.lastest_volume);
         const affiliateLink = sourceUrl
           ? generatedLinks.get(sourceUrl) ?? normalizeAffiliateLink(product.promotion_link)
           : undefined;
@@ -151,6 +184,8 @@ export class AliExpressProvider implements AffiliateProvider {
           currentPrice,
           previousPrice: originalPrice,
           discountPercentage: calculateDiscount(currentPrice, originalPrice),
+          rating,
+          sales,
         }];
       });
       this.lastError = undefined;
@@ -171,9 +206,34 @@ export class AliExpressProvider implements AffiliateProvider {
     return this.lastError;
   }
 
+  private cycle = 0;
+  private extendedFields = true;
+
+  /** Janela circular sobre a lista de palavras-chave; os primeiros itens (nucleo) sempre entram. */
+  private nextKeywords(): string[] {
+    const core = HARDWARE_KEYWORDS.slice(0, 8);
+    const rotating = HARDWARE_KEYWORDS.slice(8);
+    const size = Math.max(1, KEYWORDS_PER_CYCLE - core.length);
+    const start = (this.cycle * size) % rotating.length;
+    this.cycle += 1;
+    return [...core, ...Array.from({ length: size }, (_, index) => rotating[(start + index) % rotating.length]!)];
+  }
+
   private async queryProducts(keyword: string): Promise<AliExpressProduct[]> {
+    try {
+      return await this.queryProductsOnce(keyword, this.extendedFields ? EXTENDED_FIELDS : BASE_FIELDS);
+    } catch (error) {
+      if (!this.extendedFields || axios.isAxiosError(error)) throw error;
+      // A API rejeitou os campos opcionais: segue com o conjunto basico (sem nota/vendas).
+      this.extendedFields = false;
+      console.warn(`AliExpress: campos de reputacao recusados (${error instanceof Error ? error.message : error}); usando o conjunto basico.`);
+      return this.queryProductsOnce(keyword, BASE_FIELDS);
+    }
+  }
+
+  private async queryProductsOnce(keyword: string, fields: string[]): Promise<AliExpressProduct[]> {
     const response = await this.callApi<ProductQueryResponse>("aliexpress.affiliate.product.query", {
-      fields: PRODUCT_FIELDS,
+      fields: fields.join(","),
       keywords: keyword,
       page_no: "1",
       page_size: "20",
@@ -332,4 +392,19 @@ function normalizeAffiliateLink(link?: string): string | undefined {
 
 function parsePrice(value?: string): number | undefined {
   return parseBrlPrice(value);
+}
+
+/** "evaluate_rate" chega como porcentagem (ex.: "94.5%"); converte para a escala de 0 a 5. */
+function parseRate(value?: string | number): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const number = Number.parseFloat(String(value).replace("%", "").replace(",", "."));
+  if (!Number.isFinite(number) || number <= 0) return undefined;
+  const stars = number > 5 ? number / 20 : number;
+  return Math.min(5, Math.round(stars * 10) / 10);
+}
+
+function parseVolume(value?: string | number): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const number = Number.parseInt(String(value).replace(/\D/g, ""), 10);
+  return Number.isFinite(number) ? number : undefined;
 }

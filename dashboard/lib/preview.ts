@@ -33,6 +33,16 @@ function header(discount: number): string | undefined {
   return undefined;
 }
 
+/** Espelha cleanTitle do bot: tira decoração e corta num ponto natural. */
+export function cleanTitle(title: string, maxLength: number): string {
+  const cleaned = title.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/gu, " ").replace(/[【】★☆✔✅❤️🔥]+/g, " ").replace(/\s{2,}/g, " ").trim();
+  if (cleaned.length <= maxLength) return cleaned;
+  const window = cleaned.slice(0, maxLength);
+  const cut = Math.max(...[", ", " - ", " | ", " com ", " para "].map((separator) => window.lastIndexOf(separator)));
+  const base = cut >= Math.min(50, maxLength * 0.5) ? window.slice(0, cut) : window.slice(0, window.lastIndexOf(" ") > 20 ? window.lastIndexOf(" ") : maxLength);
+  return `${base.replace(/[\s,;:/\-–|(]+$/, "")}…`;
+}
+
 /** Espelha formatCaption do bot para o preview ao vivo (mantenha as duas em sincronia). */
 export function previewCaption(offer: OfferLite, ad: AdOptions, botUsername: string): { lines: Line[]; buttons: string[] } {
   const compact = ad.template === "compacto";
@@ -47,7 +57,8 @@ export function previewCaption(offer: OfferLite, ad: AdOptions, botUsername: str
   }
   lines.push([{ t: `🔥 ${brl.format(offer.price)}${discount ? ` (-${discount}%)` : ""}`, b: true }]);
   blank();
-  lines.push([{ t: offer.title.length > 200 ? `${offer.title.slice(0, 199)}…` : offer.title, b: true }]);
+  lines.push([{ t: cleanTitle(offer.title, ad.titleMaxLength), b: true }]);
+  if (ad.showStoreLine && !compact) lines.push([{ t: `🏪 ${STORE_LABEL[offer.provider] ?? offer.provider}` }]);
   if (offer.couponCode) {
     blank();
     lines.push([{ t: "🎟️ Cupom: " }, { t: offer.couponCode, code: true }, { t: " (toque para copiar)" }]);

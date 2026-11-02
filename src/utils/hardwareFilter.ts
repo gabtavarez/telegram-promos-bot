@@ -73,6 +73,9 @@ const BLOCKED_TERMS = [
 const LOW_QUALITY_TERMS = [
   /\b(gt\s?710|gt\s?730|gt\s?1030|rx\s?550|rx\s?580\s+2048sp)\b/i,
   /\b(celeron|pentium|atom|sempron|core\s+2\s+duo|i[357]\s*-\s*[2-7]\d{3})\b/i,
+  /\bi[3579]\s*-?\s*[2-8]\s*(?:[ªaºo]\b|(?:a|th|nd|rd|st)?\s*(?:gen|ger))/i,
+  /\bplaca-?\s?m[aã]e\s+(?:lga\s?)?(?:775|1155|1156|1150|1151|am3\+?|fm2\+?)\b/i,
+  /\bkit\s+upgrade\b/i,
   /\b(ddr2|ddr3|2gb\s+ram|4gb\s+ram|emmc|hd\s+320gb|hd\s+500gb)\b/i,
   /\b(ssd\s+(?:16|32|64|120|128)gb|(?:16|32|64|120|128)gb\s+ssd)\b/i,
   /\b(fonte\s+real|fonte\s+gamer\s+real|bivolt\s+chaveada|fonte\s+atx\s+(?:200|230|250|300|350)w)\b/i,

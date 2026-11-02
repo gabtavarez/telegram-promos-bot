@@ -42,6 +42,37 @@ const HARDWARE_KEYWORDS = [
   "Apple iPhone 15 128GB",
   "Apple iPhone 16 128GB",
 ];
+// Buscas por marca (rotativas) ampliam a variedade sem repetir sempre os mesmos resultados.
+const BRAND_KEYWORDS = [
+  "teclado mecanico redragon",
+  "teclado mecanico akko",
+  "mouse gamer logitech g",
+  "mouse gamer attack shark",
+  "mouse gamer razer",
+  "headset gamer hyperx",
+  "headset gamer redragon",
+  "ssd nvme kingston",
+  "ssd nvme samsung",
+  "ssd nvme lexar",
+  "memoria ram kingston fury ddr5",
+  "memoria ram corsair ddr5",
+  "fonte corsair 80 plus",
+  "fonte gamemax 80 plus",
+  "monitor aoc 144hz",
+  "monitor lg ultragear",
+  "monitor samsung odyssey",
+  "gabinete gamemax",
+  "gabinete pichau",
+  "placa mae b550",
+  "placa mae b650",
+  "processador ryzen 5 5600",
+  "processador ryzen 7 7800x3d",
+  "air cooler deepcool",
+  "water cooler deepcool",
+  "mousepad gamer grande",
+  "microfone fifine",
+];
+const BRAND_KEYWORDS_PER_CYCLE = 10;
 const QUERY_CONCURRENCY = 4;
 
 const productQuery = (keyword: string) => `{
@@ -98,10 +129,20 @@ export class ShopeeProvider implements AffiliateProvider {
     });
   }
 
+  private cycle = 0;
+
+  private nextKeywords(): string[] {
+    const start = (this.cycle * BRAND_KEYWORDS_PER_CYCLE) % BRAND_KEYWORDS.length;
+    this.cycle += 1;
+    const rotating = Array.from({ length: BRAND_KEYWORDS_PER_CYCLE }, (_, index) =>
+      BRAND_KEYWORDS[(start + index) % BRAND_KEYWORDS.length]!);
+    return [...HARDWARE_KEYWORDS, ...rotating];
+  }
+
   async getDeals(): Promise<Deal[]> {
     try {
       const results = await mapSettledWithConcurrency(
-        HARDWARE_KEYWORDS,
+        this.nextKeywords(),
         QUERY_CONCURRENCY,
         (keyword) => this.queryProducts(keyword),
       );
@@ -139,6 +180,7 @@ export class ShopeeProvider implements AffiliateProvider {
           originalUrl,
           imageUrl,
           currentPrice,
+          rating,
         }];
       });
 

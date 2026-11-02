@@ -10,6 +10,10 @@ import { findCouponForDeal } from "../coupons/CouponMatcher.js";
 import type { Coupon } from "../coupons/CouponProvider.js";
 import type { FeedbackCounts, FeedbackType, PriceHistoryStats, ProviderHealth, PublishedOffer, UserAlert } from "../types/BotState.js";
 import { checkDealAvailability, isDealAvailable } from "./DealAvailabilityChecker.js";
+import { assessDeal, type Assessment } from "../quality/assess.js";
+import { buildDiversityContext, diversityBlock, diversityPenalty, type DiversityContext } from "../quality/diversity.js";
+import { detectCategory } from "../quality/categories.js";
+import type { CycleReport } from "../types/BotState.js";
 import { enrichDealPayment } from "./DealPaymentEnricher.js";
 import { getVerifiedDiscount, normalizeDealPricing } from "../utils/price.js";
 import { safeErrorMessage } from "../utils/safeError.js";
@@ -57,23 +61,86 @@ export class DealsJob {
         console.log("Bot pausado pelo painel; ciclo ignorado.");
         return "paused";
       }
+      const startedAt = Date.now();
+      const report: CycleReport = {
+        at: new Date().toISOString(),
+        durationMs: 0,
+        result: "no-deal",
+        received: 0,
+        stages: { quality: 0, promotable: 0, fresh: 0, noRepeat: 0, allowed: 0, diverse: 0 },
+        rejected: {},
+        byStore: {},
+      };
+      const reject = (reason: string, count = 1) => {
+        report.rejected[reason] = (report.rejected[reason] ?? 0) + count;
+      };
+      const finish = async (result: JobRunResult) => {
+        report.result = result;
+        report.durationMs = Date.now() - startedAt;
+        await this.store.saveCycleReport?.(report).catch((error) =>
+          console.warn("Nao foi possivel salvar o relatorio do ciclo.", error));
+        return result;
+      };
+
       const discovered = await this.attachCoupons(await this.collectDeals(cfg));
-      const qualityCandidates = discovered.filter(isQualityCandidate);
+      report.received = discovered.length;
+      for (const deal of discovered) {
+        const name = providerName(deal.provider);
+        report.byStore[name] = report.byStore[name] ?? { received: 0, passed: 0 };
+        report.byStore[name]!.received += 1;
+      }
+
+      const assessments = new Map<string, Assessment>();
+      const qualityCandidates = discovered.filter((deal) => {
+        const assessment = assessDeal(deal, cfg.quality);
+        assessments.set(deal.id, assessment);
+        if (assessment.reasons.length > 0) {
+          reject(assessment.reasons[0]!);
+          return false;
+        }
+        return true;
+      });
+      report.stages.quality = qualityCandidates.length;
       const history = await this.recordPriceHistorySafely(qualityCandidates);
       const enriched = qualityCandidates.map((deal) => withPriceHistory(deal, history.get(deal.id)));
-      const qualifiedDeals = enriched.filter(isPromotableDeal);
+      const qualifiedDeals = enriched.filter((deal) => {
+        const ok = isPromotableDeal(deal, qualityFloor(cfg.quality.mode));
+        if (!ok) reject("sem-desconto-relevante");
+        return ok;
+      });
+      report.stages.promotable = qualifiedDeals.length;
       const unposted = await this.store.filterUnposted(qualifiedDeals);
+      report.stages.fresh = unposted.length;
       const repeatFree = await this.excludeRecentRepeats(unposted, cfg);
+      if (unposted.length > repeatFree.length) reject("repeticao-recente", unposted.length - repeatFree.length);
+      report.stages.noRepeat = repeatFree.length;
       const available = applyConfigFilters(repeatFree, cfg.filters);
+      if (repeatFree.length > available.length) reject("filtro-painel", repeatFree.length - available.length);
+      report.stages.allowed = available.length;
+
+      const recentOffers = await this.store.getPublishedOffers(100).catch(() => []);
+      const diversityCtx = buildDiversityContext(recentOffers);
+      const diverse = available.filter((deal) => {
+        const assessment = assessments.get(deal.id);
+        const block = diversityBlock(deal, assessment?.category ?? detectCategory(deal.title), assessment?.brand, diversityCtx, cfg.diversity);
+        if (block) reject(block);
+        return !block;
+      });
+      report.stages.diverse = diverse.length;
+      for (const deal of diverse) {
+        const name = providerName(deal.provider);
+        if (report.byStore[name]) report.byStore[name]!.passed += 1;
+      }
       console.log(
-        `Filtro final: ${qualityCandidates.length} produto(s) de qualidade; ` +
+        `Filtro final: ${discovered.length} recebida(s); ${qualityCandidates.length} de qualidade; ` +
           `${qualifiedDeals.length} promo(s) media(s)/boa(s); ` +
           `${unposted.length} nova(s) apos o historico de 12h; ` +
           `${repeatFree.length} sem repeticao do mesmo produto; ` +
-          `${available.length} dentro dos filtros do painel.`,
+          `${available.length} dentro dos filtros do painel; ` +
+          `${diverse.length} apos os limites de diversidade.`,
       );
-      logProviderAvailability(qualifiedDeals, available);
-      await this.persistProviderHealth(qualityCandidates, qualifiedDeals, available);
+      logProviderAvailability(qualifiedDeals, diverse);
+      await this.persistProviderHealth(qualityCandidates, qualifiedDeals, diverse);
       await this.publishNewCouponsSafely();
 
       await this.notifyAlerts(qualifiedDeals).catch((error) =>
@@ -84,12 +151,12 @@ export class DealsJob {
           console.warn("Falha ao monitorar ofertas publicadas neste ciclo.", error));
       }
 
-      if (!ignorePause && (await this.isPublishBlocked(cfg))) return "limited";
+      if (!ignorePause && (await this.isPublishBlocked(cfg))) return finish("limited");
 
-      const best = await selectFirstAvailableDeal(available, this.recentProviders, this.recentCategories);
+      const best = await selectFirstAvailableDeal(diverse, assessments, diversityCtx, cfg);
       if (!best) {
         console.log("Nenhuma oferta nova encontrada neste ciclo.");
-        return "no-deal";
+        return finish("no-deal");
       }
 
       const finalDeal = await enrichDealPayment(best);
@@ -97,7 +164,7 @@ export class DealsJob {
       const affiliateUrl = addAffiliateTag(best.provider, best.originalUrl, this.tags);
       if (!(await this.store.markPosted(best.id, best.originalUrl))) {
         console.log("Oferta escolhida ja foi reservada por outra instancia.");
-        return "no-deal";
+        return finish("no-deal");
       }
       let message;
       try {
@@ -126,7 +193,15 @@ export class DealsJob {
       this.rememberProvider(best.provider);
       this.rememberCategory(best.title);
       console.log(`Oferta publicada: ${best.title}`);
-      return "published";
+      const chosen = assessments.get(best.id);
+      report.published = {
+        title: best.title.slice(0, 140),
+        provider: providerName(best.provider),
+        category: chosen?.category ?? detectCategory(best.title),
+        brand: chosen?.brand,
+        score: Math.round(chosen?.score ?? 0),
+      };
+      return finish("published");
     } finally {
       this.lastRunAt = new Date();
       this.running = false;
@@ -194,9 +269,10 @@ export class DealsJob {
     const history = await this.recordPriceHistorySafely(deals);
     const enriched = deals.map((deal) => withPriceHistory(deal, history.get(deal.id)));
     const best = await selectFirstAvailableDeal(
-      enriched.filter(isPromotableDeal),
-      this.recentProviders,
-      this.recentCategories,
+      enriched.filter((deal) => isPromotableDeal(deal)),
+      new Map(),
+      buildDiversityContext(await this.store.getPublishedOffers(100).catch(() => [])),
+      this.config,
     );
     if (!best) {
       console.log("Nenhuma oferta encontrada para teste.");
@@ -577,13 +653,33 @@ export function selectBestDeal(deals: Deal[], recentProviders: ProviderName[] = 
 
 async function selectFirstAvailableDeal(
   deals: Deal[],
-  recentProviders: ProviderName[] = [],
-  recentCategories: string[] = [],
+  assessments: Map<string, Assessment>,
+  ctx: DiversityContext,
+  cfg: BotConfig,
 ): Promise<Deal | undefined> {
-  for (const deal of [...deals].sort((a, b) => compareDeals(a, b, recentProviders, recentCategories))) {
+  const ranked = [...deals]
+    .map((deal) => ({ deal, score: scoreCandidate(deal, assessments.get(deal.id), ctx) }))
+    .sort((a, b) => b.score - a.score || a.deal.currentPrice - b.deal.currentPrice);
+  for (const { deal } of ranked.slice(0, 12)) {
     if (await isDealAvailable(deal)) return deal;
   }
   return undefined;
+}
+
+/** Pontuacao final de selecao: qualidade/marca + desconto + historico + cupom, menos repeticao de categoria/loja/marca. */
+export function scoreCandidate(deal: Deal, assessment: Assessment | undefined, ctx: DiversityContext): number {
+  const category = assessment?.category ?? detectCategory(deal.title);
+  const quality = Math.max(0, assessment?.score ?? getHardwareQualityScore(deal.title));
+  const discount = Math.min(getVerifiedDiscount(deal) ?? 0, 60);
+  const historyBonus = Math.max(0, Math.min(deal.priceHistory?.percentBelow30DayAverage ?? 0, 20));
+  const couponBonus = deal.couponCode && deal.couponVerified ? 12 : 0;
+  const storeBonus = deal.provider === "kabum" ? 14 : deal.provider === "amazon" || deal.provider === "mercado-livre" ? 8 : 0;
+  return quality * 5 + discount + historyBonus + couponBonus + storeBonus + getCategorySelectionBonus(deal.title) -
+    diversityPenalty(deal, category, assessment?.brand, ctx);
+}
+
+function qualityFloor(mode: BotConfig["quality"]["mode"]): number {
+  return mode === "rigoroso" ? 9 : mode === "amplo" ? 4 : 6;
 }
 
 export function applyConfigFilters(deals: Deal[], filters: BotConfig["filters"]): Deal[] {
@@ -610,11 +706,11 @@ function saoPauloHour(date: Date): number {
   return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", hourCycle: "h23" }).format(date));
 }
 
-export function isPromotableDeal(deal: Deal): boolean {
+export function isPromotableDeal(deal: Deal, minScore = 6): boolean {
   const qualityScore = getHardwareQualityScore(deal.title);
-  if (qualityScore < 6) return false;
+  if (qualityScore < minScore) return false;
 
-  if (deal.couponCode && deal.couponVerified && qualityScore >= 6) return true;
+  if (deal.couponCode && deal.couponVerified) return true;
   if ((getVerifiedDiscount(deal) ?? 0) >= 15) return true;
 
   if ((deal.priceHistory?.observationDays ?? 0) >= 3) {

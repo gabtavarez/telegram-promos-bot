@@ -2,15 +2,25 @@
 
 import { useConfig } from "./ConfigProvider";
 import { Field, NumberInput, Segmented, Slider, Switch, TagInput } from "./Controls";
-import type { BotConfig, StoreKey } from "@/lib/botConfig";
+import { CATEGORY_IDS, type BotConfig, type CategoryId, type StoreKey } from "@/lib/botConfig";
 import { STORE_LABEL } from "@/lib/types";
+
+const CATEGORY_LABEL: Record<CategoryId, string> = {
+  gpu: "Placa de vídeo", cpu: "Processador", "placa-mae": "Placa-mãe", ram: "Memória RAM", ssd: "SSD/HD",
+  fonte: "Fonte", gabinete: "Gabinete", cooler: "Refrigeração", monitor: "Monitor", teclado: "Teclado",
+  mouse: "Mouse", audio: "Áudio", cadeira: "Cadeira", setup: "Setup e acessórios", celular: "Celular",
+  notebook: "Notebook", tv: "TV",
+};
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const hourLabel = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
 
 export function BotEditor() {
   const { draft, edit } = useConfig();
-  const { bot, filters } = draft;
+  const { bot, filters, quality, diversity } = draft;
+  const setQuality = (patch: Partial<BotConfig["quality"]>) => edit((current) => ({ ...current, quality: { ...current.quality, ...patch } }));
+  const setDiversity = (patch: Partial<BotConfig["diversity"]>) => edit((current) => ({ ...current, diversity: { ...current.diversity, ...patch } }));
+  const toggleIn = (list: CategoryId[], id: CategoryId) => (list.includes(id) ? list.filter((item) => item !== id) : [...list, id]);
   const setBot = (patch: Partial<BotConfig["bot"]>) => edit((current) => ({ ...current, bot: { ...current.bot, ...patch } }));
   const setFilters = (patch: Partial<BotConfig["filters"]>) => edit((current) => ({ ...current, filters: { ...current.filters, ...patch } }));
   const stores = Object.keys(filters.stores) as StoreKey[];
@@ -63,6 +73,62 @@ export function BotEditor() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="section">
+        <h2>Qualidade</h2>
+        <p className="lede">Define o quão exigente o bot é com o que vai para o canal. Em produtos de risco (SSD, RAM, fonte, water cooler…), marca desconhecida é barrada.</p>
+        <Field label="Nível de exigência" hint="Rigoroso publica menos e só o que tem título forte e marca confiável; Amplo aceita mais.">
+          <Segmented value={quality.mode} onChange={(value) => setQuality({ mode: value })} options={[{ id: "rigoroso", label: "Rigoroso" }, { id: "equilibrado", label: "Equilibrado" }, { id: "amplo", label: "Amplo" }]} />
+        </Field>
+        <Field label="Exigir marca conhecida nas categorias sensíveis" hint="Evita SSD, RAM e coolers “genéricos” de marca sem reputação.">
+          <Switch label="Exigir marca conhecida" checked={quality.requireKnownBrand} onChange={(value) => setQuality({ requireKnownBrand: value })} />
+        </Field>
+        {quality.requireKnownBrand ? (
+          <Field label="Categorias sensíveis" hint="Nelas, só passa marca conhecida (ou da sua lista de preferidas)." stack>
+            <div className="chips">
+              {CATEGORY_IDS.map((id) => (
+                <button key={id} type="button" className="pill" aria-pressed={quality.strictCategories.includes(id)} onClick={() => setQuality({ strictCategories: toggleIn(quality.strictCategories, id) })}>{CATEGORY_LABEL[id]}</button>
+              ))}
+            </div>
+          </Field>
+        ) : null}
+        <Field label="Barrar títulos com variações misturadas" hint="Ex.: “128GB 256GB 512GB 1TB” — o preço anunciado costuma ser da versão mais barata.">
+          <Switch label="Barrar títulos com variações misturadas" checked={quality.blockAmbiguousTitles} onChange={(value) => setQuality({ blockAmbiguousTitles: value })} />
+        </Field>
+        <Field label="Nota mínima da loja/vendedor" hint="Só vale quando a loja informa (AliExpress, Shopee). 0 desliga.">
+          <Slider label="Nota mínima" value={quality.minRating} min={0} max={5} step={0.1} format={(value) => (value === 0 ? "off" : value.toFixed(1))} onChange={(value) => setQuality({ minRating: Math.round(value * 10) / 10 })} />
+        </Field>
+        <Field label="Vendas mínimas" hint="Só vale quando a loja informa as vendas. 0 desliga.">
+          <NumberInput label="Vendas mínimas" value={quality.minSales} max={100000} suffix="vendas" onChange={(value) => setQuality({ minSales: Math.round(value) })} />
+        </Field>
+        <Field label="Categorias desligadas" hint="Categorias marcadas nunca são publicadas." stack>
+          <div className="chips">
+            {CATEGORY_IDS.map((id) => (
+              <button key={id} type="button" className="pill" aria-pressed={quality.disabledCategories.includes(id)} onClick={() => setQuality({ disabledCategories: toggleIn(quality.disabledCategories, id) })}>{CATEGORY_LABEL[id]}</button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Marcas preferidas" hint="Ganham prioridade e passam mesmo nas categorias sensíveis." stack>
+          <TagInput label="Marcas preferidas" placeholder="kingston, redragon…" values={quality.preferredBrands} onChange={(values) => setQuality({ preferredBrands: values })} />
+        </Field>
+        <Field label="Marcas bloqueadas" hint="Nunca são publicadas." stack>
+          <TagInput label="Marcas bloqueadas" placeholder="marca ruim…" values={quality.blockedBrands} onChange={(values) => setQuality({ blockedBrands: values })} />
+        </Field>
+      </section>
+
+      <section className="section">
+        <h2>Diversidade</h2>
+        <p className="lede">Espalha o canal entre categorias, marcas e lojas nas últimas 24 horas, para não parecer sempre o mesmo tipo de produto.</p>
+        <Field label="Máximo por categoria" hint="Ex.: no máximo 3 teclados por dia. 0 = sem limite.">
+          <NumberInput label="Máximo por categoria" value={diversity.maxPerCategoryPerDay} max={50} suffix="por dia" onChange={(value) => setDiversity({ maxPerCategoryPerDay: Math.round(value) })} />
+        </Field>
+        <Field label="Máximo por marca" hint="0 = sem limite.">
+          <NumberInput label="Máximo por marca" value={diversity.maxPerBrandPerDay} max={50} suffix="por dia" onChange={(value) => setDiversity({ maxPerBrandPerDay: Math.round(value) })} />
+        </Field>
+        <Field label="Participação máxima de uma loja" hint="Passando disso, o bot busca outras lojas (vale com 6+ posts no dia). 0 = sem limite.">
+          <Slider label="Participação máxima de uma loja" value={diversity.maxStoreSharePercent} min={0} max={100} step={5} format={(value) => (value === 0 ? "sem limite" : `${value}%`)} onChange={(value) => setDiversity({ maxStoreSharePercent: value })} />
+        </Field>
       </section>
 
       <section className="section">

@@ -23,6 +23,7 @@ export const KEYS = {
   alerts: "telegram-promos:alerts",
   coupons: "telegram-promos:active-coupons",
   config: "telegram-promos:config",
+  cycles: "telegram-promos:cycles",
 } as const;
 
 export function parseJson<T>(value: string | null | undefined, fallback: T): T {

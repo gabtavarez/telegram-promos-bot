@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useConfig } from "./ConfigProvider";
-import { Field, Segmented, Switch } from "./Controls";
+import { Field, Segmented, Slider, Switch } from "./Controls";
 import { previewCaption, SAMPLE_OFFER } from "@/lib/preview";
 import type { AdOptions } from "@/lib/botConfig";
 import type { MetricsPayload, OfferLite } from "@/lib/types";
@@ -52,6 +52,12 @@ export function AdsEditor() {
           </Field>
           <Field label="Validade do cupom">
             <Switch label="Validade do cupom" checked={ad.showCouponExpiry && !compact} onChange={(value) => set("showCouponExpiry", value)} />
+          </Field>
+          <Field label="Linha da loja e nota" hint="Ex.: “🏪 AliExpress • ⭐ 4,8” abaixo do título.">
+            <Switch label="Linha da loja e nota" checked={ad.showStoreLine && !compact} onChange={(value) => set("showStoreLine", value)} />
+          </Field>
+          <Field label="Tamanho máximo do título" hint="Títulos longos de marketplace são cortados num ponto natural.">
+            <Slider label="Tamanho máximo do título" value={ad.titleMaxLength} min={40} max={200} step={10} format={(value) => `${value} car.`} onChange={(value) => set("titleMaxLength", value)} />
           </Field>
           <Field label="Hashtags de loja e categoria">
             <Switch label="Hashtags de loja e categoria" checked={ad.showHashtags} onChange={(value) => set("showHashtags", value)} />

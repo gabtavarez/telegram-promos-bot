@@ -45,21 +45,26 @@ export function timeline(offers: OfferLite[], period: Period, now = Date.now()):
 }
 
 export function categoryOf(title: string): string {
-  const t = title.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const t = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const rules: Array<[RegExp, string]> = [
-    [/\b(water\s*cooler|watercooler|aio|air\s*cooler|cooler)\b/, "Refrigeração"],
-    [/\b(rtx|gtx|radeon|geforce|placa de video)\b/, "Placa de vídeo"],
-    [/\b(processador|ryzen|intel core|core i[3579])\b/, "Processador"],
+    [/\b(notebook|laptop|ultrabook|macbook)\b/, "Notebook"],
+    [/\b(smartphone|celular|iphone|galaxy\s+[samz]\d)/, "Celular"],
+    [/\b(smart\s*tv|televisor|televisao)\b/, "TV"],
+    [/\b(monitor\s+arm|braco\s+articulado|suporte\s+(articulado|de\s+mesa|para\s+(monitor|headset|notebook))|pegboard|screenbar|mousepad|dock\s+station)\b/, "Setup e acessórios"],
+    [/\b(water\s*cooler|watercooler|aio|liquid\s+cooler|refrigeracao\s+liquida|air\s*cooler|cpu\s+cooler|fans?\s+argb|ventoinha)\b/, "Refrigeração"],
+    [/\b(rtx|gtx|radeon|geforce|gpu|placa\s+de\s+video|rx\s?\d{3,4})\b/, "Placa de vídeo"],
+    [/\b(processador|ryzen|intel\s+core|core\s+i[3579]|core\s+ultra)\b/, "Processador"],
+    [/\b(memoria\s+ram|ram\s+ddr|udimm|sodimm|dimm)\b/, "Memória RAM"],
     [/\b(placa[- ]?mae|motherboard)\b/, "Placa-mãe"],
-    [/\b(memoria ram|ddr[345])\b/, "Memória RAM"],
-    [/\b(ssd|nvme|m\.2|hd externo)\b/, "Armazenamento"],
-    [/\b(fonte|psu|80 plus)\b/, "Fonte"],
-    [/\b(gabinete)\b/, "Gabinete"],
+    [/\bddr[345]\b/, "Memória RAM"],
+    [/\b(ssd|nvme|m\.2|hd\s+externo)\b/, "Armazenamento"],
+    [/\b(fonte\s+(atx|sfx|gamer|pc|\d{3,4}w)|psu|80\s?plus)\b/, "Fonte"],
+    [/\b(gabinete|mid\s+tower|aquario)\b/, "Gabinete"],
     [/\b(monitor|ultrawide)\b/, "Monitor"],
-    [/\b(mouse|teclado|headset|fone gamer|controle)\b/, "Periféricos"],
-    [/\b(notebook|laptop)\b/, "Notebook"],
-    [/\b(smartphone|celular|iphone|galaxy)\b/, "Celular"],
-    [/\b(smart tv|televisor|tv)\b/, "TV"],
+    [/\b(teclado|keyboard)\b/, "Teclado"],
+    [/\bmouse\b/, "Mouse"],
+    [/\b(headset|fone|iem|earphone|microfone)\b/, "Áudio"],
+    [/\bcadeira\b/, "Cadeira"],
   ];
   return rules.find(([pattern]) => pattern.test(t))?.[1] ?? "Outros";
 }

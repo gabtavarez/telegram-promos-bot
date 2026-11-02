@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { StoreKey } from "@/lib/botConfig";
 import { demoMetrics } from "@/lib/demo";
-import type { HealthLite, MetricsPayload, OfferLite } from "@/lib/types";
+import type { CycleLite, HealthLite, MetricsPayload, OfferLite } from "@/lib/types";
 import { KEYS, hasUpstash, parseJson, redis } from "@/lib/upstash";
 
 export const dynamic = "force-dynamic";
@@ -31,9 +31,12 @@ function verifiedDiscount(current: number, previous?: number): number | undefine
 export async function GET() {
   if (!hasUpstash) return NextResponse.json(demoMetrics());
   try {
-    const [published, health, alerts, coupons] = await redis<Array<string | null>>([
-      "MGET", KEYS.published, KEYS.health, KEYS.alerts, KEYS.coupons,
-    ]) as [string | null, string | null, string | null, string | null];
+    const [[published, health, alerts, coupons], cycleRows] = await Promise.all([
+      redis<Array<string | null>>(["MGET", KEYS.published, KEYS.health, KEYS.alerts, KEYS.coupons]) as Promise<
+        [string | null, string | null, string | null, string | null]
+      >,
+      redis<string[]>(["LRANGE", KEYS.cycles, 0, 47]).catch(() => [] as string[]),
+    ]);
     const offers: OfferLite[] = parseJson<RawOffer[]>(published, []).map((offer) => ({
       id: offer.deal.id,
       title: offer.deal.title,
@@ -51,6 +54,7 @@ export async function GET() {
       mode: "live",
       offers,
       health: parseJson<HealthLite[]>(health, []),
+      cycles: (cycleRows ?? []).map((row) => parseJson<CycleLite | null>(row, null)).filter((row): row is CycleLite => Boolean(row)),
       alerts: parseJson<unknown[]>(alerts, []).length,
       coupons: parseJson<unknown[]>(coupons, []).length,
       generatedAt: new Date().toISOString(),

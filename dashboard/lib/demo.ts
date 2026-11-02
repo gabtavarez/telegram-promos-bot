@@ -1,4 +1,4 @@
-import type { HealthLite, MetricsPayload, OfferLite } from "./types";
+import type { CycleLite, HealthLite, MetricsPayload, OfferLite } from "./types";
 import type { StoreKey } from "./botConfig";
 
 const CATALOG: Array<[string, number, StoreKey]> = [
@@ -62,7 +62,40 @@ export function demoHealth(now = Date.now()): HealthLite[] {
   ];
 }
 
+export function demoCycles(now = Date.now()): CycleLite[] {
+  const random = rng(7);
+  return Array.from({ length: 24 }, (_, index) => {
+    const received = 300 + Math.round(random() * 60);
+    const quality = Math.round(received * (0.28 + random() * 0.08));
+    const promotable = Math.round(quality * 0.3);
+    const fresh = Math.round(promotable * 0.85);
+    const noRepeat = Math.round(fresh * 0.5);
+    const allowed = Math.round(noRepeat * 0.8);
+    const diverse = Math.round(allowed * 0.6);
+    return {
+      at: new Date(now - index * 5 * 60_000).toISOString(),
+      durationMs: 24_000,
+      result: diverse > 0 && index % 4 === 0 ? "published" : "no-deal",
+      received,
+      stages: { quality, promotable, fresh, noRepeat, allowed, diverse },
+      rejected: {
+        "marca-desconhecida": Math.round(received * 0.22),
+        "qualidade-baixa": Math.round(received * 0.2),
+        "titulo-ambiguo": Math.round(received * 0.05),
+        "sem-desconto-relevante": quality - promotable,
+        "repeticao-recente": fresh - noRepeat,
+        "limite-categoria": allowed - diverse,
+      },
+      byStore: {
+        AliExpress: { received: Math.round(received * 0.3), passed: Math.round(diverse * 0.3) },
+        Shopee: { received: Math.round(received * 0.5), passed: Math.round(diverse * 0.4) },
+        Kabum: { received: 25, passed: Math.round(diverse * 0.3) },
+      },
+    };
+  });
+}
+
 export function demoMetrics(): MetricsPayload {
   const now = Date.now();
-  return { mode: "demo", offers: demoOffers(now), health: demoHealth(now), alerts: 17, coupons: 6, generatedAt: new Date(now).toISOString() };
+  return { mode: "demo", offers: demoOffers(now), health: demoHealth(now), cycles: demoCycles(now), alerts: 17, coupons: 6, generatedAt: new Date(now).toISOString() };
 }

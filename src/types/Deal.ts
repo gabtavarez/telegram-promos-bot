@@ -22,4 +22,8 @@ export interface Deal {
   couponEndsAt?: string;
   couponVerified?: boolean;
   priceHistory?: PriceHistoryStats;
+  /** Nota media da loja/vendedor numa escala de 0 a 5, quando a fonte informa. */
+  rating?: number;
+  /** Unidades vendidas recentemente, quando a fonte informa. */
+  sales?: number;
 }

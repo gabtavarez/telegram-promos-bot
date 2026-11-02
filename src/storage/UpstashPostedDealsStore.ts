@@ -7,6 +7,7 @@ import type {
   PriceHistoryStats,
   PublishedOffer,
   ProviderHealth,
+  CycleReport,
   UserAlert,
 } from "../types/BotState.js";
 import type { DealsStore } from "./DealsStore.js";
@@ -220,6 +221,11 @@ export class UpstashPostedDealsStore implements DealsStore {
     });
   }
 
+  async saveCycleReport(report: CycleReport): Promise<void> {
+    await this.command<number>(["LPUSH", cyclesKey(), JSON.stringify(report)]);
+    await this.command<string>(["LTRIM", cyclesKey(), 0, 47]);
+  }
+
   async getConfig(): Promise<unknown> {
     const value = await this.command<string | null>(["GET", configKey()]);
     return parseJson<unknown>(value, undefined);
@@ -249,6 +255,10 @@ export class UpstashPostedDealsStore implements DealsStore {
     this.mutationTail = result.then(() => undefined, () => undefined);
     return result;
   }
+}
+
+function cyclesKey(): string {
+  return "telegram-promos:cycles";
 }
 
 function redisKey(identifier: string): string {
