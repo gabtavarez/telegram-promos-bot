@@ -283,7 +283,7 @@ describe("provider delivery checks", () => {
 
     expect(axiosMocks.get).toHaveBeenCalledWith(
       "https://productdata.awin.com/datafeed/download/apikey/secret",
-      { responseType: "arraybuffer" },
+      { responseType: "stream" },
     );
     expect(deals).toHaveLength(1);
     expect(deals[0]).toMatchObject({

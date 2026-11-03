@@ -163,8 +163,8 @@ export class KabumProvider implements AffiliateProvider {
       try {
         // Streaming: o feed completo da KaBuM (milhares de itens x ~90 colunas) estoura a memoria
         // de 512 MB se for baixado e convertido de uma vez. Guardamos so as colunas usadas.
-        const { data } = await this.client.get<Readable>(this.config.feedUrl, { responseType: "stream" });
-        const { header, records } = await streamCsvFeed(data);
+        const { data } = await this.client.get<Readable | Buffer | string>(this.config.feedUrl, { responseType: "stream" });
+        const { header, records } = await streamCsvFeed(toChunks(data));
         this.feedHeader = header;
         return records;
       } catch (error) {
@@ -183,6 +183,14 @@ export class KabumProvider implements AffiliateProvider {
     const { data } = await this.client.get<string>(path, { responseType: "text" });
     return parseJsonLines(data);
   }
+}
+
+function toChunks(data: Readable | Buffer | ArrayBuffer | string): AsyncIterable<Buffer | string> {
+  if (typeof data === "string" || Buffer.isBuffer(data) || data instanceof ArrayBuffer) {
+    const single = typeof data === "string" || Buffer.isBuffer(data) ? data : Buffer.from(data);
+    return (async function* () { yield single; })();
+  }
+  return data;
 }
 
 /** Colunas do feed que o bot usa; o resto (specs, imagens extras, custom_*) e descartado na leitura. */
