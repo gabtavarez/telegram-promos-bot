@@ -159,7 +159,7 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
       info = {
         name: product.name,
         imageUrl: product.pictures?.[0]?.secure_url ?? product.pictures?.[0]?.url,
-        permalink: product.permalink ?? `https://www.mercadolivre.com.br/p/${id}`,
+        permalink: validUrl(product.permalink) ?? `https://www.mercadolivre.com.br/p/${id}`,
         fetchedAt: Date.now(),
       };
       this.products.set(id, info);
@@ -174,12 +174,13 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
 
   private async itemDeal(id: string, get: <T>(path: string) => Promise<T>): Promise<Deal | undefined> {
     const item = await get<MlItem & { title?: string; permalink?: string; thumbnail?: string; pictures?: Array<{ secure_url?: string }> }>(`/items/${id}`);
-    if (!item.title || !item.permalink || !isPcHardwareDeal(item.title)) return undefined;
+    const permalink = validUrl(item.permalink);
+    if (!item.title || !permalink || !isPcHardwareDeal(item.title)) return undefined;
     if (item.condition && item.condition !== "new") return undefined;
     if (item.status && item.status !== "active") return undefined;
     const image = item.pictures?.[0]?.secure_url ?? item.thumbnail?.replace(/^http:/, "https:");
     if (!image) return undefined;
-    return toDeal(`mercado-livre:${id}`, item.title, item.permalink, image, item);
+    return toDeal(`mercado-livre:${id}`, item.title, permalink, image, item);
   }
 }
 
@@ -236,6 +237,16 @@ async function mapLimit<T>(items: T[], limit: number, worker: (item: T) => Promi
       await worker(item);
     }
   }));
+}
+
+function validUrl(value?: string): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function describe(error: unknown): string {
