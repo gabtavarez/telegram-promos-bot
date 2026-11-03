@@ -5,6 +5,7 @@ import { env } from "./config/env.js";
 import type { AffiliateProvider } from "./providers/AffiliateProvider.js";
 import { AmazonProvider } from "./providers/AmazonProvider.js";
 import { MercadoLivreProvider } from "./providers/MercadoLivreProvider.js";
+import { MercadoLivreApiProvider } from "./providers/MercadoLivreApiProvider.js";
 import { AliExpressProvider } from "./providers/aliexpress.provider.js";
 import { KabumProvider } from "./providers/KabumProvider.js";
 import { ShopeeProvider } from "./providers/ShopeeProvider.js";
@@ -31,8 +32,9 @@ async function main(): Promise<void> {
     : undefined;
   if (mlAuth) console.log(`API oficial do Mercado Livre: ${(await mlAuth.isConnected()) ? "conectada" : "aguardando login em /ml/login"}.`);
 
-  const providers: AffiliateProvider[] = [new MercadoLivreProvider(env.ML_DEALS_URL)];
-  console.log("Coleta publica de ofertas do Mercado Livre ativa.");
+  // Com o app do ML autorizado, a coleta usa a API oficial; a pagina publica fica bloqueada por CAPTCHA no Render.
+  const providers: AffiliateProvider[] = [mlAuth ? new MercadoLivreApiProvider(mlAuth) : new MercadoLivreProvider(env.ML_DEALS_URL)];
+  console.log(mlAuth ? "Coleta do Mercado Livre pela API oficial ativa." : "Coleta publica de ofertas do Mercado Livre ativa.");
   if (env.AMAZON_ENABLED) providers.push(new AmazonProvider(env.AMAZON_DEALS_URL));
   if (env.KABUM_ENABLED && (env.KABUM_AWIN_FEED_URL || env.AWIN_ACCESS_TOKEN)) {
     providers.push(
