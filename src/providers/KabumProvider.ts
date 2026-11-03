@@ -1,4 +1,6 @@
-import { gunzipSync } from "node:zlib";
+import { createGunzip, gunzipSync } from "node:zlib";
+import { Readable } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
 import axios, { type AxiosInstance } from "axios";
 import type { Deal } from "../types/Deal.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
@@ -50,6 +52,7 @@ export class KabumProvider implements AffiliateProvider {
   readonly name = "Kabum";
   private readonly client: AxiosInstance;
   private feedSource = "automatico";
+  private feedHeader: string[] = [];
   private lastError?: string;
 
   constructor(private readonly config: KabumConfig) {
@@ -64,7 +67,7 @@ export class KabumProvider implements AffiliateProvider {
   async getDeals(): Promise<Deal[]> {
     try {
       const records = await this.fetchFeedRecords();
-      const columns = records[0] ? Object.keys(records[0]) : [];
+      const columns = this.feedHeader.length ? this.feedHeader : records[0] ? Object.keys(records[0]) : [];
       if (columns.length) {
         console.log(`Kabum/Awin (${this.feedSource}): colunas do feed: ${columns.join(", ")}`);
       }
@@ -158,8 +161,12 @@ export class KabumProvider implements AffiliateProvider {
     if (this.config.feedUrl) {
       this.feedSource = "feed manual";
       try {
-        const { data } = await this.client.get<ArrayBuffer>(this.config.feedUrl, { responseType: "arraybuffer" });
-        return parseCsvFeed(decodeFeedData(data));
+        // Streaming: o feed completo da KaBuM (milhares de itens x ~90 colunas) estoura a memoria
+        // de 512 MB se for baixado e convertido de uma vez. Guardamos so as colunas usadas.
+        const { data } = await this.client.get<Readable>(this.config.feedUrl, { responseType: "stream" });
+        const { header, records } = await streamCsvFeed(data);
+        this.feedHeader = header;
+        return records;
       } catch (error) {
         if (!this.config.accessToken) throw error;
         const message = axios.isAxiosError(error)
@@ -176,6 +183,110 @@ export class KabumProvider implements AffiliateProvider {
     const { data } = await this.client.get<string>(path, { responseType: "text" });
     return parseJsonLines(data);
   }
+}
+
+/** Colunas do feed que o bot usa; o resto (specs, imagens extras, custom_*) e descartado na leitura. */
+const KEEP_COLUMNS = new Set([
+  "aw_deep_link", "product_name", "aw_product_id", "merchant_product_id", "merchant_image_url", "aw_image_url",
+  "large_image", "description", "product_short_description", "promotional_text", "search_price", "store_price",
+  "display_price", "merchant_deep_link", "condition", "brand_name", "product_price_old", "rrp_price", "saving",
+  "savings_percent", "in_stock", "stock_status", "is_for_sale", "average_rating", "rating", "reviews",
+  "deep_link", "deeplink", "link", "product_url", "url", "title", "name", "price", "sale_price", "availability",
+  "image_link", "image_url", "product_id", "id",
+]);
+const MAX_TEXT_LENGTH = 1_500;
+
+export async function streamCsvFeed(stream: AsyncIterable<Buffer | string>): Promise<{ header: string[]; records: AwinFeedRecord[] }> {
+  const iterator = stream[Symbol.asyncIterator]();
+  const first = await iterator.next();
+  if (first.done) return { header: [], records: [] };
+  const head = Buffer.isBuffer(first.value) ? first.value : Buffer.from(first.value);
+  async function* raw(): AsyncGenerator<Buffer> {
+    yield head;
+    for (;;) {
+      const next = await iterator.next();
+      if (next.done) return;
+      yield Buffer.isBuffer(next.value) ? next.value : Buffer.from(next.value);
+    }
+  }
+  const source: AsyncIterable<Buffer> = isGzip(head) ? Readable.from(raw()).pipe(createGunzip()) : raw();
+
+  const decoder = new StringDecoder("utf8");
+  const records: AwinFeedRecord[] = [];
+  let header: string[] | undefined;
+  let keep: Array<[number, string]> = [];
+  let delimiter: string | undefined;
+  let pending = "";
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  let started = false;
+
+  const pushRow = () => {
+    row.push(field);
+    field = "";
+    if (!header) {
+      header = row.map((column, index) => (index === 0 ? column.replace(/^\uFEFF/, "") : column)).map(normalizeColumn);
+      keep = header.flatMap((column, index): Array<[number, string]> => (KEEP_COLUMNS.has(column) ? [[index, column]] : []));
+    } else if (row.some((value) => value.trim())) {
+      const record: AwinFeedRecord = {};
+      for (const [index, column] of keep) {
+        const value = row[index]?.trim() ?? "";
+        record[column] = value.length > MAX_TEXT_LENGTH ? value.slice(0, MAX_TEXT_LENGTH) : value;
+      }
+      records.push(record);
+    }
+    row = [];
+  };
+
+  const consume = (text: string) => {
+    for (let index = 0; index < text.length; index += 1) {
+      const char = text[index];
+      if (char === "\"") {
+        if (quoted && text[index + 1] === "\"") {
+          field += "\"";
+          index += 1;
+        } else if (quoted && index === text.length - 1) {
+          // Aspas no fim do bloco: decide no proximo bloco se e escape ("") ou fechamento.
+          pending = "\"";
+          return;
+        } else {
+          quoted = !quoted;
+        }
+        continue;
+      }
+      if (char === delimiter && !quoted) {
+        row.push(field);
+        field = "";
+        continue;
+      }
+      if ((char === "\n" || char === "\r") && !quoted) {
+        if (char === "\r" && text[index + 1] === "\n") index += 1;
+        pushRow();
+        continue;
+      }
+      field += char;
+    }
+  };
+
+  for await (const chunk of source) {
+    let text = pending + decoder.write(chunk);
+    pending = "";
+    if (!started) {
+      // Detecta o delimitador pela primeira linha.
+      const newline = text.search(/\r?\n/);
+      if (newline < 0) { pending = text; continue; }
+      delimiter = detectCsvDelimiter(text.slice(0, newline));
+      started = true;
+    }
+    consume(text);
+  }
+  const tail = pending + decoder.end();
+  if (!started && tail) delimiter = detectCsvDelimiter(tail.split(/\r?\n/, 1)[0] ?? "");
+  if (tail) { started = true; consume(tail); }
+  if (pending === "\"") { quoted = !quoted; pending = ""; }
+  if (field || row.length) pushRow();
+  return { header: header ?? [], records };
 }
 
 function decodeFeedData(data: ArrayBuffer | Buffer | string): string {
