@@ -64,6 +64,10 @@ describe("assessDeal", () => {
   it("detecta titulos com variacoes misturadas", () => {
     expect(hasAmbiguousVariants("NVME M2 128GB 256GB 512GB 1TB 3.0 2280")).toBe(true);
     expect(hasAmbiguousVariants("Cooler Liquido 120/240/360 ARGB para CPU")).toBe(true);
+    expect(hasAmbiguousVariants("Memória RAM Kingston Fury Beast DDR4 8G 16G 32GB 3600 3200Mhz para PC com dissipador")).toBe(true);
+    expect(hasAmbiguousVariants("Memoria RAM DDR4 3200/3600MHz 16GB")).toBe(true);
+    expect(hasAmbiguousVariants("Memória Kingston Fury Beast 16GB (2x8GB) 3200MHz DDR4")).toBe(false);
+    expect(hasAmbiguousVariants("Roteador Wi-Fi 6 Dual Band 2.4G 5G TP-Link Archer AX23")).toBe(false);
     expect(hasAmbiguousVariants("SSD Kingston NV3 1TB NVMe")).toBe(false);
   });
 

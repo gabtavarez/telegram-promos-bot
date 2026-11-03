@@ -50,8 +50,14 @@ const MIN_SCORE: Record<BotConfig["quality"]["mode"], number> = {
  */
 export function hasAmbiguousVariants(title: string): boolean {
   const t = normalizeText(title);
-  const sizes = new Set([...t.matchAll(/\b(\d{1,4})\s?(gb|tb|mm)\b/g)].map((m) => `${m[1]}${m[2]}`));
+  // "8G 16G 32GB": em memoria/armazenamento, "G"/"T" sem o "B" tambem e capacidade.
+  const storage = /\b(?:ddr\d?|ram|memoria|ssd|nvme|hd|pendrive|cartao)\b/.test(t);
+  const sizePattern = storage ? /\b(\d{1,4})\s?(gb?|tb?|mm)\b/g : /\b(\d{1,4})\s?(gb|tb|mm)\b/g;
+  const sizes = new Set([...t.matchAll(sizePattern)].map((m) => `${m[1]}${m[2]![0]}`));
   if (sizes.size >= 3) return true;
+  // "3600 3200mhz", "3200/3600mhz": varias frequencias de memoria no mesmo anuncio.
+  if (/\b\d{4}\s*(?:mhz)?\s*[\s/,]\s*\d{4}\s*mhz\b/.test(t)) return true;
+  if (/\bddr4\b/.test(t) && /\bddr5\b/.test(t)) return true;
   if (/\b\d{2,4}\s*\/\s*\d{2,4}\s*\/\s*\d{2,4}\b/.test(t)) return true;
   if (/\b\d{2,4}\s*(?:gb|tb|mm)?\s*\/\s*\d{2,4}\s*(?:gb|tb|mm)\b/.test(t) && /\b(?:ssd|nvme|ram|ddr|cooler|aio)\b/.test(t)) return true;
   const speeds = new Set([...t.matchAll(/\b(\d{4})\s?mhz\b/g)].map((m) => m[1]));

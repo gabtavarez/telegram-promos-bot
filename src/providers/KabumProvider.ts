@@ -25,6 +25,12 @@ interface AwinFeedProduct {
   availability?: string;
   condition?: string;
   payment_text?: string;
+  old_price?: string | number;
+  saving?: string | number;
+  savings_percent?: string | number;
+  is_for_sale?: string;
+  rating?: string | number;
+  reviews?: string | number;
 }
 
 type AwinFeedRecord = Record<string, unknown> & {
@@ -60,7 +66,7 @@ export class KabumProvider implements AffiliateProvider {
       const records = await this.fetchFeedRecords();
       const columns = records[0] ? Object.keys(records[0]) : [];
       if (columns.length) {
-        console.log(`Kabum/Awin (${this.feedSource}): colunas do feed: ${columns.slice(0, 30).join(", ")}`);
+        console.log(`Kabum/Awin (${this.feedSource}): colunas do feed: ${columns.join(", ")}`);
       }
       const stats: KabumFeedStats = {
         records: records.length,
@@ -69,6 +75,7 @@ export class KabumProvider implements AffiliateProvider {
         blockedUsed: 0,
         blockedFilter: 0,
       };
+      const trustedStock = stockColumnsTrusted(records);
       const deals = records.flatMap((record): Deal[] => {
         if (record.error) throw new Error(record.message ?? `Awin feed error ${record.error}`);
 
@@ -82,11 +89,11 @@ export class KabumProvider implements AffiliateProvider {
         const payment = extractPaymentDetails(product.payment_text);
         const listedPrice = salePrice && regularPrice && salePrice < regularPrice ? salePrice : regularPrice;
         const currentPrice = payment.pixPrice ?? listedPrice;
-        const previousPrice = salePrice && regularPrice && salePrice < regularPrice ? regularPrice : undefined;
+        const previousPrice = pickPreviousPrice(listedPrice, regularPrice, salePrice, product);
 
         if (!id || !title || !originalUrl || !imageUrl || !currentPrice) return [];
         stats.withRequiredFields += 1;
-        if (isUnavailable(product.availability)) {
+        if (isUnavailable(product.availability) || isOutOfStock(product, trustedStock)) {
           stats.blockedUnavailable += 1;
           return [];
         }
@@ -114,11 +121,14 @@ export class KabumProvider implements AffiliateProvider {
           installmentText: payment.installmentText,
           previousPrice,
           discountPercentage: calculateDiscount(currentPrice, previousPrice),
+          rating: parseRating(product.rating),
+          sales: parseCount(product.reviews),
         }];
       });
 
       const uniqueDeals = [...new Map(deals.map((deal) => [deal.id, deal])).values()];
       this.lastError = undefined;
+      logPriceColumnCoverage(records);
       console.log(
         `Kabum/Awin (${this.feedSource}): ${stats.records} registro(s); ` +
           `${stats.withRequiredFields} com campos minimos; ` +
@@ -201,6 +211,12 @@ function flattenProduct(record: AwinFeedRecord): AwinFeedProduct {
     sale_price: pickValue(flat, "store_price", "sale_price"),
     availability: pickValue(flat, "in_stock", "stock_status", "availability"),
     condition: pickValue(flat, "condition"),
+    old_price: pickValue(flat, "product_price_old", "rrp_price", "old_price", "price_old"),
+    saving: pickValue(flat, "saving"),
+    savings_percent: pickValue(flat, "savings_percent"),
+    is_for_sale: pickValue(flat, "is_for_sale"),
+    rating: pickValue(flat, "average_rating", "rating"),
+    reviews: pickValue(flat, "reviews"),
     payment_text: [
       pickValue(flat, "display_price"),
       pickValue(flat, "promotional_text"),
@@ -331,6 +347,71 @@ function getDisplayUrl(value?: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Preco "de" verificado pela loja: coluna de preco antigo/sugerido do feed, ou preco cheio vs. promocional.
+ * Ignora valores absurdos (mais de 4x o atual) e diferencas menores que 3%, comuns em feed desatualizado.
+ */
+export function pickPreviousPrice(
+  current: number | undefined,
+  regular: number | undefined,
+  sale: number | undefined,
+  product: Pick<AwinFeedProduct, "old_price" | "saving" | "savings_percent">,
+): number | undefined {
+  if (!current) return undefined;
+  const fromSaving = (() => {
+    const saving = parseFeedPrice(product.saving);
+    if (saving && saving > 0) return current + saving;
+    const percent = Number(String(product.savings_percent ?? "").replace(",", ".").replace("%", ""));
+    if (Number.isFinite(percent) && percent > 0 && percent < 90) return current / (1 - percent / 100);
+    return undefined;
+  })();
+  const candidates = [
+    parseFeedPrice(product.old_price),
+    sale && regular && sale < regular ? regular : undefined,
+    fromSaving,
+  ].filter((value): value is number => value !== undefined && value > current * 1.03 && value <= current * 4);
+  if (!candidates.length) return undefined;
+  return Math.round(Math.max(...candidates) * 100) / 100;
+}
+
+const NO_VALUE = /^(0|false|no|n|nao|não)$/i;
+const YES_VALUE = /^(1|true|yes|y|sim)$/i;
+
+/**
+ * So confia nas colunas de estoque quando o feed realmente as usa (ha ao menos um item marcado como
+ * em estoque); feeds que deixam tudo "0" por padrao nao derrubam o catalogo inteiro.
+ */
+export function stockColumnsTrusted(records: AwinFeedRecord[]): { inStock: boolean; forSale: boolean } {
+  const has = (column: string) => records.some((record) => YES_VALUE.test(String(record[column] ?? "").trim()));
+  return { inStock: has("in_stock"), forSale: has("is_for_sale") };
+}
+
+function isOutOfStock(product: AwinFeedProduct, trusted: { inStock: boolean; forSale: boolean }): boolean {
+  if (trusted.inStock && NO_VALUE.test(String(product.availability ?? "").trim())) return true;
+  return trusted.forSale && NO_VALUE.test(String(product.is_for_sale ?? "").trim());
+}
+
+function parseRating(value?: string | number): number | undefined {
+  const rating = Number(String(value ?? "").replace(",", "."));
+  if (!Number.isFinite(rating) || rating <= 0) return undefined;
+  // Alguns feeds usam escala 0-10 ou 0-100.
+  const normalized = rating > 10 ? rating / 20 : rating > 5 ? rating / 2 : rating;
+  return Math.round(normalized * 10) / 10;
+}
+
+function parseCount(value?: string | number): number | undefined {
+  const count = Number(String(value ?? "").replace(/\D/g, ""));
+  return Number.isFinite(count) && count > 0 ? count : undefined;
+}
+
+function logPriceColumnCoverage(records: AwinFeedRecord[]): void {
+  const columns = ["product_price_old", "rrp_price", "saving", "savings_percent", "store_price", "in_stock", "stock_quantity", "brand_name", "average_rating", "reviews"];
+  const coverage = columns
+    .filter((column) => records[0] && column in records[0])
+    .map((column) => `${column}=${records.filter((record) => String(record[column] ?? "").trim() && String(record[column]).trim() !== "0").length}`);
+  if (coverage.length) console.log(`Kabum/Awin: colunas preenchidas: ${coverage.join(", ")}`);
 }
 
 function isUnavailable(value?: string): boolean {
