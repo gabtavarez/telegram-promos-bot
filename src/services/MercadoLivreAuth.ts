@@ -52,7 +52,7 @@ class TokenStore {
 /** OAuth do app do Mercado Livre (authorization code + PKCE, com refresh automatico). */
 export class MercadoLivreAuth {
   private readonly store: TokenStore;
-  private readonly pending = new Map<string, { verifier: string; createdAt: number }>();
+  private readonly pending = new Map<string, { verifier?: string; createdAt: number }>();
   private cached?: StoredToken;
   private refreshing?: Promise<StoredToken | undefined>;
 
@@ -66,21 +66,18 @@ export class MercadoLivreAuth {
     this.store = new TokenStore(upstashUrl, upstashToken);
   }
 
-  authorizationUrl(): string {
+  authorizationUrl(usePkce = true): string {
     const state = randomBytes(16).toString("hex");
-    const verifier = randomBytes(32).toString("base64url");
-    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const verifier = usePkce ? randomBytes(32).toString("base64url") : undefined;
     for (const [key, value] of this.pending) if (Date.now() - value.createdAt > 15 * 60_000) this.pending.delete(key);
     this.pending.set(state, { verifier, createdAt: Date.now() });
     const url = new URL(AUTH);
-    url.search = new URLSearchParams({
-      response_type: "code",
-      client_id: this.clientId,
-      redirect_uri: this.redirectUri,
-      state,
-      code_challenge: challenge,
-      code_challenge_method: "S256",
-    }).toString();
+    const params = new URLSearchParams({ response_type: "code", client_id: this.clientId, redirect_uri: this.redirectUri, state });
+    if (verifier) {
+      params.set("code_challenge", createHash("sha256").update(verifier).digest("base64url"));
+      params.set("code_challenge_method", "S256");
+    }
+    url.search = params.toString();
     return url.toString();
   }
 
@@ -92,7 +89,7 @@ export class MercadoLivreAuth {
       grant_type: "authorization_code",
       code,
       redirect_uri: this.redirectUri,
-      code_verifier: pending.verifier,
+      ...(pending.verifier ? { code_verifier: pending.verifier } : {}),
     });
   }
 

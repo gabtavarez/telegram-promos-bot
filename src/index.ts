@@ -211,7 +211,7 @@ async function handleMercadoLivreRoute(
         return;
       }
       if (url.pathname === "/ml/login") {
-        response.writeHead(302, { location: mlAuth.authorizationUrl() }).end();
+        response.writeHead(302, { location: mlAuth.authorizationUrl(url.searchParams.get("pkce") !== "0") }).end();
         return;
       }
       send(response, 200, await mlAuth.diagnose(url.searchParams.get("q") ?? undefined));
