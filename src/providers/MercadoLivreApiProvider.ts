@@ -43,6 +43,8 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
   private readonly pool = new Map<string, PoolEntry>();
   private readonly products = new Map<string, ProductInfo>();
   private readonly lastDeals = new Map<string, Deal>();
+  /** Produtos que a API recusa (403) ou que sumiram (404): nao voltam ao radar. */
+  private readonly refused = new Set<string>();
   private lastError?: string;
 
   constructor(private readonly auth: MercadoLivreAuth) {}
@@ -79,7 +81,11 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined;
         const code = `${entry.type.toLowerCase()}:${status ?? (axios.isAxiosError(error) ? error.code : "erro")}`;
         failureCodes.set(code, (failureCodes.get(code) ?? 0) + 1);
-        if (status === 404) { this.pool.delete(entry.id); this.lastDeals.delete(entry.id); }
+        if (status === 403 || status === 404) {
+          this.pool.delete(entry.id);
+          this.lastDeals.delete(entry.id);
+          this.refused.add(entry.id);
+        }
       }
     });
 
@@ -137,7 +143,7 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
         this.highlightAt.set(category, Date.now());
         for (const entry of data.content ?? []) {
           const type = entry.type === "ITEM" ? "ITEM" : "PRODUCT";
-          if (!this.pool.has(entry.id)) {
+          if (!this.pool.has(entry.id) && !this.refused.has(entry.id)) {
             this.pool.set(entry.id, { id: entry.id, type, addedAt: Date.now(), checkedAt: 0 });
             added += 1;
           }
