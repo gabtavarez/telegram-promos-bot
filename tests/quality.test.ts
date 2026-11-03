@@ -11,7 +11,8 @@ import type { PublishedOffer } from "../src/types/BotState.js";
 import type { Deal } from "../src/types/Deal.js";
 
 const quality = DEFAULT_BOT_CONFIG.quality;
-const diversity = DEFAULT_BOT_CONFIG.diversity;
+// Limites fixos (3 por categoria, 2 por marca, 60% por loja) para os testes de bloqueio.
+const diversity = { ...DEFAULT_BOT_CONFIG.diversity, maxPerCategoryPerDay: 3, maxPerBrandPerDay: 2, maxStoreSharePercent: 60 };
 
 const deal = (title: string, extra: Partial<Deal> = {}): Deal => ({
   id: `aliexpress:${title}`,
@@ -159,7 +160,8 @@ describe("configuracao do painel", () => {
   it("aplica padroes de qualidade e diversidade", () => {
     const cfg = parseBotConfig({});
     expect(cfg.quality.requireKnownBrand).toBe(true);
-    expect(cfg.diversity.maxPerCategoryPerDay).toBe(3);
+    expect(cfg.diversity.maxPerCategoryPerDay).toBe(5);
+    expect(cfg.diversity.maxSilenceMinutes).toBe(45);
   });
 
   it("entradas invalidas voltam ao padrao", () => {

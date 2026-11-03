@@ -13,7 +13,7 @@ const HIGHLIGHTS_PER_CYCLE = 10;
 const HIGHLIGHT_TTL_MS = 3 * 60 * 60_000;
 const PRICES_PER_CYCLE = 60;
 const PRODUCT_INFO_TTL_MS = 24 * 60 * 60_000;
-const CONCURRENCY = 6;
+const CONCURRENCY = 3;
 
 interface ProductInfo {
   name: string;
@@ -66,6 +66,7 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
     // Verifica primeiro os itens nunca checados, depois os mais antigos.
     const batch = [...this.pool.values()].sort((a, b) => a.checkedAt - b.checkedAt).slice(0, PRICES_PER_CYCLE);
     let failures = 0;
+    const failureCodes = new Map<string, number>();
     await mapLimit(batch, CONCURRENCY, async (entry) => {
       try {
         const deal = entry.type === "PRODUCT" ? await this.productDeal(entry.id, get) : await this.itemDeal(entry.id, get);
@@ -76,6 +77,8 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
         failures += 1;
         entry.checkedAt = Date.now();
         const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+        const code = `${entry.type.toLowerCase()}:${status ?? (axios.isAxiosError(error) ? error.code : "erro")}`;
+        failureCodes.set(code, (failureCodes.get(code) ?? 0) + 1);
         if (status === 404) { this.pool.delete(entry.id); this.lastDeals.delete(entry.id); }
       }
     });
@@ -83,7 +86,8 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
     const deals = [...this.lastDeals.values()];
     console.log(
       `Mercado Livre (API): ${this.categories.length} categoria(s); ${highlightStats}; ` +
-        `${this.pool.size} produto(s) no radar; ${batch.length} preco(s) atualizados (${failures} falha(s)); ` +
+        `${this.pool.size} produto(s) no radar; ${batch.length} preco(s) atualizados (${failures} falha(s)` +
+        `${failureCodes.size ? `: ${[...failureCodes].map(([code, n]) => `${code}=${n}`).join(", ")}` : ""}); ` +
         `${deals.length} oferta(s) de hardware.`,
     );
     this.lastError = undefined;

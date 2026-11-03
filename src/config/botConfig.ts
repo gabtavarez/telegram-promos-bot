@@ -28,6 +28,8 @@ export const botConfigSchema = z.object({
     dailyLimit: z.number().int().min(0).max(500).default(0),
     repeatWindowHours: z.number().int().min(12).max(336).default(48),
     repostPriceDropPercent: z.number().min(1).max(50).default(8),
+    /** Modo evento (11.11, Black Friday): limites de diversidade em dobro e canal nunca fica parado. */
+    eventMode: z.boolean().default(false),
   }).default({
     paused: false,
     quietHours: { enabled: false, start: 23, end: 7 },
@@ -35,6 +37,7 @@ export const botConfigSchema = z.object({
     dailyLimit: 0,
     repeatWindowHours: 48,
     repostPriceDropPercent: 8,
+    eventMode: false,
   }),
   filters: z.object({
     minDiscount: z.number().min(0).max(90).default(0),
@@ -110,12 +113,14 @@ export const botConfigSchema = z.object({
   }),
   diversity: z.object({
     /** Maximo de ofertas da mesma categoria nas ultimas 24h (0 = sem limite). */
-    maxPerCategoryPerDay: z.number().int().min(0).max(50).default(3),
+    maxPerCategoryPerDay: z.number().int().min(0).max(50).default(5),
     /** Maximo de ofertas da mesma marca nas ultimas 24h (0 = sem limite). */
-    maxPerBrandPerDay: z.number().int().min(0).max(50).default(2),
+    maxPerBrandPerDay: z.number().int().min(0).max(50).default(3),
     /** Participacao maxima de uma loja nas ultimas 24h, em % (0 = sem limite). */
     maxStoreSharePercent: z.number().int().min(0).max(100).default(60),
-  }).default({ maxPerCategoryPerDay: 3, maxPerBrandPerDay: 2, maxStoreSharePercent: 60 }),
+    /** Sem post ha esse tempo e com ofertas boas na fila, os limites viram so preferencia (0 = nunca). */
+    maxSilenceMinutes: z.number().int().min(0).max(720).default(45),
+  }).default({ maxPerCategoryPerDay: 5, maxPerBrandPerDay: 3, maxStoreSharePercent: 60, maxSilenceMinutes: 45 }),
 });
 
 export type BotConfig = z.infer<typeof botConfigSchema>;
@@ -126,6 +131,22 @@ export const DEFAULT_BOT_CONFIG: BotConfig = botConfigSchema.parse({});
 
 /** Entrada invalida nunca derruba o bot: volta para o padrao. */
 export function parseBotConfig(raw: unknown): BotConfig {
-  const result = botConfigSchema.safeParse(raw ?? {});
+  const result = botConfigSchema.safeParse(migrateDiversity(raw ?? {}));
   return result.success ? result.data : DEFAULT_BOT_CONFIG;
+}
+
+/**
+ * Os limites antigos (3 por categoria / 2 por marca) travavam o canal. Configuracoes salvas
+ * exatamente com esses valores antigos (sem o campo novo) passam para os padroes atuais.
+ */
+function migrateDiversity(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null) return raw;
+  const config = raw as Record<string, unknown>;
+  const diversity = config.diversity as Record<string, unknown> | undefined;
+  if (!diversity || "maxSilenceMinutes" in diversity) return raw;
+  const legacy = diversity.maxPerCategoryPerDay === 3 && diversity.maxPerBrandPerDay === 2;
+  return {
+    ...config,
+    diversity: legacy ? { ...diversity, maxPerCategoryPerDay: 5, maxPerBrandPerDay: 3 } : diversity,
+  };
 }

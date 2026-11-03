@@ -21,7 +21,6 @@ import { withTimeout } from "../utils/timeout.js";
 import { isRecentRepeat } from "../utils/similarity.js";
 import { DEFAULT_BOT_CONFIG, parseBotConfig, type BotConfig } from "../config/botConfig.js";
 
-const DIVERSITY_STALL_MS = 2 * 60 * 60 * 1_000;
 
 const PROVIDER_TIMEOUT_MS = 120_000;
 
@@ -122,17 +121,19 @@ export class DealsJob {
 
       const recentOffers = await this.store.getPublishedOffers(100).catch(() => []);
       const diversityCtx = buildDiversityContext(recentOffers);
+      const limits = effectiveDiversity(cfg);
       let diverse = available.filter((deal) => {
         const assessment = assessments.get(deal.id);
-        const block = diversityBlock(deal, assessment?.category ?? detectCategory(deal.title), assessment?.brand, diversityCtx, cfg.diversity);
+        const block = diversityBlock(deal, assessment?.category ?? detectCategory(deal.title), assessment?.brand, diversityCtx, limits);
         if (block) reject(block);
         return !block;
       });
       // Valvula de seguranca: se os limites travaram tudo e o canal esta parado ha horas, vale so a
       // penalidade suave de diversidade (a melhor oferta sai), para nao deixar o canal em silencio.
       const lastPublishedMs = recentOffers[0] ? Date.parse(recentOffers[0].publishedAt) : 0;
-      if (diverse.length === 0 && available.length > 0 && Date.now() - lastPublishedMs >= DIVERSITY_STALL_MS) {
-        console.log(`Limites de diversidade liberados: nada publicado ha mais de ${DIVERSITY_STALL_MS / 3_600_000}h.`);
+      const silenceMs = limits.maxSilenceMinutes * 60_000;
+      if (diverse.length === 0 && available.length > 0 && silenceMs > 0 && Date.now() - lastPublishedMs >= silenceMs) {
+        console.log(`Limites de diversidade viraram preferencia: nada publicado ha mais de ${limits.maxSilenceMinutes} min.`);
         diverse = available;
       }
       report.stages.diverse = diverse.length;
@@ -873,4 +874,17 @@ function providerName(provider: ProviderName): string {
 
 function couponKey(coupon: Coupon): string {
   return `${coupon.advertiserId}:${coupon.advertiserName.toLowerCase()}:${coupon.code.toUpperCase()}`;
+}
+
+/** Modo evento dobra os limites de diversidade e encurta o tempo maximo sem post. */
+export function effectiveDiversity(cfg: BotConfig): BotConfig["diversity"] {
+  const base = cfg.diversity;
+  if (!cfg.bot.eventMode) return base;
+  const double = (value: number) => (value === 0 ? 0 : value * 2);
+  return {
+    maxPerCategoryPerDay: double(base.maxPerCategoryPerDay),
+    maxPerBrandPerDay: double(base.maxPerBrandPerDay),
+    maxStoreSharePercent: base.maxStoreSharePercent === 0 ? 0 : Math.min(100, base.maxStoreSharePercent + 15),
+    maxSilenceMinutes: base.maxSilenceMinutes === 0 ? 20 : Math.min(base.maxSilenceMinutes, 20),
+  };
 }

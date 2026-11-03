@@ -33,6 +33,9 @@ export function BotEditor() {
         <Field label="Bot ativo">
           <Switch label="Bot ativo" checked={!bot.paused} onChange={(value) => setBot({ paused: !value })} />
         </Field>
+        <Field label="Modo evento (11.11, Black Friday)" hint="Dobra os limites de diversidade e não deixa o canal mais de 20 min sem oferta boa. Desligue depois do evento.">
+          <Switch label="Modo evento" checked={bot.eventMode} onChange={(value) => setBot({ eventMode: value })} />
+        </Field>
       </section>
 
       <section className="section">
@@ -120,7 +123,7 @@ export function BotEditor() {
       <section className="section">
         <h2>Diversidade</h2>
         <p className="lede">Espalha o canal entre categorias, marcas e lojas nas últimas 24 horas, para não parecer sempre o mesmo tipo de produto.</p>
-        <Field label="Máximo por categoria" hint="Ex.: no máximo 3 teclados por dia. 0 = sem limite.">
+        <Field label="Máximo por categoria" hint="Ex.: no máximo 5 teclados por dia. 0 = sem limite.">
           <NumberInput label="Máximo por categoria" value={diversity.maxPerCategoryPerDay} max={50} suffix="por dia" onChange={(value) => setDiversity({ maxPerCategoryPerDay: Math.round(value) })} />
         </Field>
         <Field label="Máximo por marca" hint="0 = sem limite.">
@@ -128,6 +131,9 @@ export function BotEditor() {
         </Field>
         <Field label="Participação máxima de uma loja" hint="Passando disso, o bot busca outras lojas (vale com 6+ posts no dia). 0 = sem limite.">
           <Slider label="Participação máxima de uma loja" value={diversity.maxStoreSharePercent} min={0} max={100} step={5} format={(value) => (value === 0 ? "sem limite" : `${value}%`)} onChange={(value) => setDiversity({ maxStoreSharePercent: value })} />
+        </Field>
+        <Field label="Tempo máximo sem post" hint="Passado esse tempo sem publicar, os limites acima viram só preferência e a melhor oferta sai. 0 = limites sempre rígidos.">
+          <NumberInput label="Tempo máximo sem post" value={diversity.maxSilenceMinutes} max={720} suffix="min" onChange={(value) => setDiversity({ maxSilenceMinutes: Math.round(value) })} />
         </Field>
       </section>
 
