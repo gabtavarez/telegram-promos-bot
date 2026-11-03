@@ -9,6 +9,7 @@ import { AliExpressProvider } from "./providers/aliexpress.provider.js";
 import { KabumProvider } from "./providers/KabumProvider.js";
 import { ShopeeProvider } from "./providers/ShopeeProvider.js";
 import { DealsJob } from "./services/DealsJob.js";
+import { MercadoLivreAuth } from "./services/MercadoLivreAuth.js";
 import { TelegramPublisher } from "./services/TelegramPublisher.js";
 import { TelegramAdminBot } from "./services/TelegramAdminBot.js";
 import type { DealsStore } from "./storage/DealsStore.js";
@@ -24,6 +25,11 @@ async function main(): Promise<void> {
     ? new UpstashPostedDealsStore(env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN!)
     : new PostedDealsStore(env.DATA_FILE);
   await store.initialize();
+
+  const mlAuth = env.ML_CLIENT_ID && env.ML_CLIENT_SECRET
+    ? new MercadoLivreAuth(env.ML_CLIENT_ID, env.ML_CLIENT_SECRET, env.ML_REDIRECT_URI, env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN)
+    : undefined;
+  if (mlAuth) console.log(`API oficial do Mercado Livre: ${(await mlAuth.isConnected()) ? "conectada" : "aguardando login em /ml/login"}.`);
 
   const providers: AffiliateProvider[] = [new MercadoLivreProvider(env.ML_DEALS_URL)];
   console.log("Coleta publica de ofertas do Mercado Livre ativa.");
@@ -98,7 +104,7 @@ async function main(): Promise<void> {
     console.log("Comandos administrativos desativados; alertas publicos continuam ativos.");
   }
 
-  const server = startHttpServer(env.PORT, job, env.RUN_NOW_TOKEN);
+  const server = startHttpServer(env.PORT, job, env.RUN_NOW_TOKEN, mlAuth);
 
   const runCycle = () => {
     void job.run().catch((error) => console.error("Ciclo de ofertas falhou.", error));
@@ -149,7 +155,7 @@ function isValidToken(provided: string | null, expected?: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-function startHttpServer(port: number | undefined, job: DealsJob, runNowToken?: string): Server | undefined {
+function startHttpServer(port: number | undefined, job: DealsJob, runNowToken?: string, mlAuth?: MercadoLivreAuth): Server | undefined {
   if (!port) return undefined;
   const send = (response: import("node:http").ServerResponse, status: number, body: unknown) => {
     response.writeHead(status, { "content-type": "application/json" });
@@ -178,10 +184,61 @@ function startHttpServer(port: number | undefined, job: DealsJob, runNowToken?: 
       void task.catch((error) => console.error("Execucao manual falhou.", error));
       return;
     }
+    if (url.pathname.startsWith("/ml/") && mlAuth) {
+      void handleMercadoLivreRoute(url, response, mlAuth, send);
+      return;
+    }
     response.writeHead(404).end();
   });
   server.listen(port, "0.0.0.0", () => console.log(`HTTP ativo na porta ${port}.`));
   return server;
+}
+
+async function handleMercadoLivreRoute(
+  url: URL,
+  response: import("node:http").ServerResponse,
+  mlAuth: MercadoLivreAuth,
+  send: (response: import("node:http").ServerResponse, status: number, body: unknown) => void,
+): Promise<void> {
+  const html = (status: number, message: string) => {
+    response.writeHead(status, { "content-type": "text/html; charset=utf-8" });
+    response.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><body style="font-family:system-ui;padding:24px"><h2>Tavarez Promos</h2><p>${message}</p></body>`);
+  };
+  try {
+    if (url.pathname === "/ml/login" || url.pathname === "/ml/diagnose") {
+      if (!isValidToken(url.searchParams.get("token"), env.ML_ADMIN_TOKEN)) {
+        send(response, 401, { error: "unauthorized" });
+        return;
+      }
+      if (url.pathname === "/ml/login") {
+        response.writeHead(302, { location: mlAuth.authorizationUrl() }).end();
+        return;
+      }
+      send(response, 200, await mlAuth.diagnose(url.searchParams.get("q") ?? undefined));
+      return;
+    }
+    if (url.pathname === "/ml/callback") {
+      const code = url.searchParams.get("code");
+      const state = url.searchParams.get("state");
+      if (!code || !state) {
+        html(400, `Login cancelado ou incompleto (${escapeHtml(url.searchParams.get("error") ?? "sem código")}).`);
+        return;
+      }
+      const token = await mlAuth.handleCallback(code, state);
+      console.log(`Mercado Livre conectado (usuario ${token.userId ?? "?"}).`);
+      html(200, "✅ Mercado Livre conectado ao bot. Pode fechar esta aba.");
+      return;
+    }
+    response.writeHead(404).end();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Mercado Livre: erro na rota", url.pathname, message);
+    html(500, `Erro: ${escapeHtml(message)}`);
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char]!);
 }
 
 process.on("unhandledRejection", (reason) => console.error("Promise rejeitada sem tratamento.", reason));

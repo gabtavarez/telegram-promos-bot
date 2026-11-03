@@ -27,6 +27,10 @@ const envSchema = z.object({
   DATA_FILE: z.string().default("./data/posted-deals.json"),
   RUN_ON_START: booleanFromString(true),
   RUN_NOW_TOKEN: optionalString,
+  ML_CLIENT_ID: optionalString,
+  ML_CLIENT_SECRET: optionalString,
+  ML_REDIRECT_URI: z.url().default("https://telegram-promos-bot.onrender.com/ml/callback"),
+  ML_ADMIN_TOKEN: optionalString,
   TELEGRAM_ADMIN_USER_ID: z.preprocess(
     (value) => (value === "" ? undefined : value),
     z.string().regex(/^\d+$/).optional(),
