@@ -33,7 +33,8 @@ async function main(): Promise<void> {
   if (mlAuth) console.log(`API oficial do Mercado Livre: ${(await mlAuth.isConnected()) ? "conectada" : "aguardando login em /ml/login"}.`);
 
   // Com o app do ML autorizado, a coleta usa a API oficial; a pagina publica fica bloqueada por CAPTCHA no Render.
-  const providers: AffiliateProvider[] = [mlAuth ? new MercadoLivreApiProvider(mlAuth) : new MercadoLivreProvider(env.ML_DEALS_URL)];
+  const mlApi = mlAuth ? new MercadoLivreApiProvider(mlAuth) : undefined;
+  const providers: AffiliateProvider[] = [mlApi ?? new MercadoLivreProvider(env.ML_DEALS_URL)];
   console.log(mlAuth ? "Coleta do Mercado Livre pela API oficial ativa." : "Coleta publica de ofertas do Mercado Livre ativa.");
   if (env.AMAZON_ENABLED) providers.push(new AmazonProvider(env.AMAZON_DEALS_URL));
   if (env.KABUM_ENABLED && (env.KABUM_AWIN_FEED_URL || env.AWIN_ACCESS_TOKEN)) {
@@ -106,7 +107,7 @@ async function main(): Promise<void> {
     console.log("Comandos administrativos desativados; alertas publicos continuam ativos.");
   }
 
-  const server = startHttpServer(env.PORT, job, env.RUN_NOW_TOKEN, mlAuth);
+  const server = startHttpServer(env.PORT, job, env.RUN_NOW_TOKEN, mlAuth, mlApi);
 
   const runCycle = () => {
     void job.run().catch((error) => console.error("Ciclo de ofertas falhou.", error));
@@ -157,7 +158,7 @@ function isValidToken(provided: string | null, expected?: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-function startHttpServer(port: number | undefined, job: DealsJob, runNowToken?: string, mlAuth?: MercadoLivreAuth): Server | undefined {
+function startHttpServer(port: number | undefined, job: DealsJob, runNowToken?: string, mlAuth?: MercadoLivreAuth, mlApi?: MercadoLivreApiProvider): Server | undefined {
   if (!port) return undefined;
   const send = (response: import("node:http").ServerResponse, status: number, body: unknown) => {
     response.writeHead(status, { "content-type": "application/json" });
@@ -187,7 +188,7 @@ function startHttpServer(port: number | undefined, job: DealsJob, runNowToken?: 
       return;
     }
     if (url.pathname.startsWith("/ml/") && mlAuth) {
-      void handleMercadoLivreRoute(url, response, mlAuth, send);
+      void handleMercadoLivreRoute(url, response, mlAuth, send, job, mlApi);
       return;
     }
     response.writeHead(404).end();
@@ -201,12 +202,29 @@ async function handleMercadoLivreRoute(
   response: import("node:http").ServerResponse,
   mlAuth: MercadoLivreAuth,
   send: (response: import("node:http").ServerResponse, status: number, body: unknown) => void,
+  job?: DealsJob,
+  mlApi?: MercadoLivreApiProvider,
 ): Promise<void> {
   const html = (status: number, message: string) => {
     response.writeHead(status, { "content-type": "text/html; charset=utf-8" });
     response.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><body style="font-family:system-ui;padding:24px"><h2>Tavarez Promos</h2><p>${message}</p></body>`);
   };
   try {
+    if (url.pathname === "/ml/inspect") {
+      if (!isValidToken(url.searchParams.get("token"), env.ML_ADMIN_TOKEN)) {
+        send(response, 401, { error: "unauthorized" });
+        return;
+      }
+      const query = url.searchParams.get("q");
+      if (!query || !mlApi || !job) {
+        send(response, 400, { error: "use ?q=modelo do produto" });
+        return;
+      }
+      const { deals, details } = await mlApi.inspect(query);
+      const explained = await Promise.all(deals.map((deal) => job.explainDeal(deal)));
+      send(response, 200, { query, api: details, filtros: explained });
+      return;
+    }
     if (url.pathname === "/ml/login" || url.pathname === "/ml/diagnose") {
       if (!isValidToken(url.searchParams.get("token"), env.ML_ADMIN_TOKEN)) {
         send(response, 401, { error: "unauthorized" });

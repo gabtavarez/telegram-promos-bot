@@ -478,6 +478,41 @@ export class DealsJob {
   }
 
   /** Remove ofertas do mesmo produto ja publicadas recentemente, salvo queda relevante de preco. */
+  /** Diagnostico: diz em qual etapa do filtro uma oferta seria barrada (sem publicar nada). */
+  async explainDeal(deal: Deal): Promise<Record<string, unknown>> {
+    const cfg = await this.loadConfig();
+    const [withCoupon] = await this.attachCoupons([deal]);
+    const candidate = withCoupon ?? deal;
+    const assessment = assessDeal(candidate, cfg.quality);
+    const history = (await this.recordPriceHistorySafely([candidate])).get(candidate.id);
+    const enriched = withPriceHistory(candidate, history);
+    const promotable = isPromotableDeal(enriched, qualityFloor(cfg.quality.mode));
+    const unposted = (await this.store.filterUnposted([enriched])).length > 0;
+    const notRepeat = (await this.excludeRecentRepeats([enriched], cfg)).length > 0;
+    const allowedByPanel = applyConfigFilters([enriched], cfg.filters).length > 0;
+    const recentOffers = await this.store.getPublishedOffers(100).catch(() => []);
+    const diversity = diversityBlock(enriched, assessment.category, assessment.brand, buildDiversityContext(recentOffers), effectiveDiversity(cfg));
+    const stages = [
+      ["qualidade", assessment.reasons.length === 0, assessment.reasons.join(", ")],
+      ["promocao", promotable, `desconto verificado ${getVerifiedDiscount(enriched) ?? 0}%; historico ${history?.observationDays ?? 0} dia(s), ${history?.percentBelow30DayAverage ?? 0}% abaixo da media`],
+      ["nao-postado-12h", unposted, ""],
+      ["sem-repeticao", notRepeat, ""],
+      ["filtros-do-painel", allowedByPanel, ""],
+      ["diversidade", !diversity, diversity ?? ""],
+    ] as const;
+    const blockedAt = stages.find(([, ok]) => !ok);
+    return {
+      title: enriched.title,
+      price: enriched.currentPrice,
+      previousPrice: enriched.previousPrice ?? null,
+      category: assessment.category,
+      brand: assessment.brand ?? null,
+      score: assessment.score,
+      verdict: blockedAt ? `barrada em: ${blockedAt[0]}${blockedAt[2] ? ` (${blockedAt[2]})` : ""}` : "passaria em todos os filtros",
+      stages: Object.fromEntries(stages.map(([name, ok, note]) => [name, note ? { ok, note } : { ok }])),
+    };
+  }
+
   private async excludeRecentRepeats(deals: Deal[], cfg: BotConfig): Promise<Deal[]> {
     if (deals.length === 0) return deals;
     try {

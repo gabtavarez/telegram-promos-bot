@@ -104,6 +104,46 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
     return deals;
   }
 
+  /** Diagnostico: busca produtos no catalogo e mostra o que a API devolve e o que o bot montaria. */
+  async inspect(query: string): Promise<{ deals: Deal[]; details: unknown[] }> {
+    const token = await this.auth.getAccessToken();
+    if (!token) throw new Error("API do Mercado Livre sem login.");
+    const get = <T>(path: string) =>
+      axios.get<T>(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` }, timeout: 15_000 }).then((r) => r.data);
+    const found = await get<{ results?: Array<{ id: string; name: string }> }>(
+      `/products/search?status=active&site_id=MLB&q=${encodeURIComponent(query)}&limit=3`,
+    );
+    const deals: Deal[] = [];
+    const details: unknown[] = [];
+    for (const product of found.results ?? []) {
+      const detail: Record<string, unknown> = {
+        productId: product.id,
+        name: product.name,
+        inRadar: this.pool.has(product.id),
+        refused: this.refused.has(product.id),
+        lastCheckedAt: this.pool.get(product.id)?.checkedAt ? new Date(this.pool.get(product.id)!.checkedAt).toISOString() : null,
+      };
+      try {
+        const items = await get<{ results?: MlItem[] }>(`/products/${product.id}/items?limit=20`);
+        detail.items = (items.results ?? []).slice(0, 4).map((item) => ({
+          item_id: item.item_id, price: item.price, original_price: item.original_price,
+          condition: item.condition, official_store_id: item.official_store_id,
+        }));
+        const best = pickBestOffer(items.results ?? []);
+        if (best?.item_id) {
+          detail.salePrice = await get(`/items/${best.item_id}/sale_price?context=channel_marketplace`).catch((error) => ({ error: describe(error) }));
+        }
+        const deal = await this.productDeal(product.id, get);
+        if (deal) deals.push(deal);
+        else detail.skipped = "sem imagem, sem anuncio novo ou fora do filtro de hardware";
+      } catch (error) {
+        detail.error = describe(error);
+      }
+      details.push(detail);
+    }
+    return { deals, details };
+  }
+
   private async refreshCategories(get: <T>(path: string) => Promise<T>): Promise<void> {
     if (this.categories.length && Date.now() - this.categoriesAt < CATEGORY_REFRESH_MS) return;
     const found = new Set<string>();
