@@ -63,6 +63,8 @@ export const REJECT_LABEL: Record<string, string> = {
   "marca-bloqueada": "Marca bloqueada",
   "marca-desconhecida": "Marca desconhecida",
   "titulo-ambiguo": "Título com variações misturadas",
+  "fonte-de-baixa-qualidade": "Fonte de marca com histórico ruim",
+  "fone-generico": "Fone de celular sem marca",
   "avaliacao-baixa": "Avaliação baixa",
   "poucas-vendas": "Poucas vendas",
   "sem-desconto-relevante": "Sem desconto relevante",

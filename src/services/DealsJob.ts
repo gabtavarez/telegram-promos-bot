@@ -162,6 +162,11 @@ export class DealsJob {
       }
 
       if (!ignorePause && (await this.isPublishBlocked(cfg))) return finish("limited");
+      if (!ignorePause) {
+        const night = await this.nightFilter(diverse, cfg);
+        if (night && night.length === 0) return finish("limited");
+        if (night) diverse = night;
+      }
 
       const best = await selectFirstAvailableDeal(diverse, assessments, diversityCtx, cfg);
       if (!best) {
@@ -451,6 +456,24 @@ export class DealsJob {
     return this.config;
   }
 
+  /**
+   * Madrugada: o canal quase ninguem le, entao so sai oferta excepcional e no maximo uma por hora.
+   * Retorna undefined fora do horario; [] quando nada pode sair agora.
+   */
+  private async nightFilter(deals: Deal[], cfg: BotConfig): Promise<Deal[] | undefined> {
+    const night = cfg.bot.nightMode;
+    if (!night.enabled || !isWithinHours(saoPauloHour(new Date()), night.start, night.end)) return undefined;
+    const offers = await this.store.getPublishedOffers(5).catch(() => []);
+    const last = offers[0] ? Date.parse(offers[0].publishedAt) : 0;
+    if (Date.now() - last < 60 * 60_000) {
+      console.log("Madrugada: no maximo uma oferta por hora.");
+      return [];
+    }
+    const exceptional = deals.filter((deal) => isExceptionalDeal(deal, night.minDiscount));
+    if (exceptional.length === 0) console.log(`Madrugada: nenhuma oferta com ${night.minDiscount}%+ real neste ciclo.`);
+    return exceptional;
+  }
+
   /** Horario silencioso, limite diario e intervalo minimo entre publicacoes no canal. */
   private async isPublishBlocked(cfg: BotConfig): Promise<boolean> {
     const { quietHours, dailyLimit, minMinutesBetweenPosts } = cfg.bot;
@@ -516,7 +539,7 @@ export class DealsJob {
   private async excludeRecentRepeats(deals: Deal[], cfg: BotConfig): Promise<Deal[]> {
     if (deals.length === 0) return deals;
     try {
-      const recent = await this.store.getPublishedOffers(100);
+      const recent = await this.store.getPublishedOffers(PUBLISHED_MEMORY);
       const windowMs = cfg.bot.repeatWindowHours * 60 * 60 * 1_000;
       const drop = cfg.bot.repostPriceDropPercent / 100;
       return deals.filter((deal) => !isRecentRepeat(deal, recent, Date.now(), windowMs, drop));
@@ -756,13 +779,30 @@ export function isPromotableDeal(deal: Deal, minScore = 6): boolean {
   if (qualityScore < minScore) return false;
 
   if (deal.couponCode && deal.couponVerified) return true;
-  if ((getVerifiedDiscount(deal) ?? 0) >= 15) return true;
+  if ((getVerifiedDiscount(deal) ?? 0) >= 15 && !hasInflatedDiscount(deal)) return true;
 
   if ((deal.priceHistory?.observationDays ?? 0) >= 3) {
     return (deal.priceHistory?.percentBelow30DayAverage ?? 0) >= 10;
   }
 
   return false;
+}
+
+/**
+ * "De R$ 949 por R$ 799" so vale se o preco atual estiver de fato abaixo do que a loja cobrou nos
+ * ultimos 30 dias. Preco "de" inflado com o atual na media e desconto de mentira.
+ */
+export function hasInflatedDiscount(deal: Deal): boolean {
+  const history = deal.priceHistory;
+  if (!history || history.observationDays < 5) return false;
+  return (history.percentBelow30DayAverage ?? 0) < 3;
+}
+
+/** Oferta que justifica post de madrugada: desconto real alto, queda forte no historico ou cupom. */
+export function isExceptionalDeal(deal: Deal, minDiscount: number): boolean {
+  if (deal.couponCode && deal.couponVerified && (getVerifiedDiscount(deal) ?? 0) >= minDiscount * 0.6) return true;
+  if ((getVerifiedDiscount(deal) ?? 0) >= minDiscount && !hasInflatedDiscount(deal)) return true;
+  return (deal.priceHistory?.observationDays ?? 0) >= 3 && (deal.priceHistory?.percentBelow30DayAverage ?? 0) >= Math.max(15, minDiscount - 5);
 }
 
 export function isQualityCandidate(deal: Deal): boolean {
@@ -912,6 +952,9 @@ function couponKey(coupon: Coupon): string {
 }
 
 /** Modo evento dobra os limites de diversidade e encurta o tempo maximo sem post. */
+/** Quantas publicacoes recentes o bot consulta (cerca de 5-7 dias no ritmo atual). */
+const PUBLISHED_MEMORY = 300;
+
 export function effectiveDiversity(cfg: BotConfig): BotConfig["diversity"] {
   const base = cfg.diversity;
   if (!cfg.bot.eventMode) return base;

@@ -57,6 +57,27 @@ export function BotEditor() {
             </div>
           </Field>
         ) : null}
+        <Field label="Madrugada só com ofertas excepcionais" hint="No intervalo abaixo, só sai oferta com desconto real alto (ou queda forte no histórico) e no máximo uma por hora. As boas ficam para o dia.">
+          <Switch label="Madrugada só com ofertas excepcionais" checked={bot.nightMode.enabled} onChange={(value) => setBot({ nightMode: { ...bot.nightMode, enabled: value } })} />
+        </Field>
+        {bot.nightMode.enabled ? (
+          <>
+            <Field label="Madrugada das / até">
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <select className="select" aria-label="Início da madrugada" value={bot.nightMode.start} onChange={(event) => setBot({ nightMode: { ...bot.nightMode, start: Number(event.target.value) } })}>
+                  {HOURS.map((hour) => <option key={hour} value={hour}>{hourLabel(hour)}</option>)}
+                </select>
+                <span className="note">até</span>
+                <select className="select" aria-label="Fim da madrugada" value={bot.nightMode.end} onChange={(event) => setBot({ nightMode: { ...bot.nightMode, end: Number(event.target.value) } })}>
+                  {HOURS.map((hour) => <option key={hour} value={hour}>{hourLabel(hour)}</option>)}
+                </select>
+              </div>
+            </Field>
+            <Field label="Desconto mínimo de madrugada">
+              <NumberInput label="Desconto mínimo de madrugada" value={bot.nightMode.minDiscount} max={90} suffix="%" onChange={(value) => setBot({ nightMode: { ...bot.nightMode, minDiscount: Math.round(value) } })} />
+            </Field>
+          </>
+        ) : null}
         <Field label="Intervalo mínimo entre ofertas" hint="0 = publica sempre que achar uma boa oferta.">
           <NumberInput label="Intervalo mínimo em minutos" value={bot.minMinutesBetweenPosts} max={720} suffix="min" onChange={(value) => setBot({ minMinutesBetweenPosts: Math.round(value) })} />
         </Field>

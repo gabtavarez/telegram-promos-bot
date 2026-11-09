@@ -30,6 +30,13 @@ export const botConfigSchema = z.object({
     repostPriceDropPercent: z.number().min(1).max(50).default(8),
     /** Modo evento (11.11, Black Friday): limites de diversidade em dobro e canal nunca fica parado. */
     eventMode: z.boolean().default(false),
+    /** Madrugada: so ofertas excepcionais e no maximo uma por hora (as boas ficam para o dia). */
+    nightMode: z.object({
+      enabled: z.boolean().default(true),
+      start: hour.default(0),
+      end: hour.default(7),
+      minDiscount: z.number().int().min(0).max(90).default(25),
+    }).default({ enabled: true, start: 0, end: 7, minDiscount: 25 }),
   }).default({
     paused: false,
     quietHours: { enabled: false, start: 23, end: 7 },
@@ -38,6 +45,7 @@ export const botConfigSchema = z.object({
     repeatWindowHours: 48,
     repostPriceDropPercent: 8,
     eventMode: false,
+    nightMode: { enabled: true, start: 0, end: 7, minDiscount: 25 },
   }),
   filters: z.object({
     minDiscount: z.number().min(0).max(90).default(0),

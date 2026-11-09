@@ -11,6 +11,8 @@ export type RejectReason =
   | "marca-bloqueada"
   | "marca-desconhecida"
   | "titulo-ambiguo"
+  | "fonte-de-baixa-qualidade"
+  | "fone-generico"
   | "avaliacao-baixa"
   | "poucas-vendas";
 
@@ -20,6 +22,8 @@ export const REJECT_LABELS: Record<RejectReason | "limite-categoria" | "limite-m
   "marca-bloqueada": "Marca bloqueada",
   "marca-desconhecida": "Marca desconhecida",
   "titulo-ambiguo": "Título com variações misturadas",
+  "fonte-de-baixa-qualidade": "Fonte de marca com histórico ruim",
+  "fone-generico": "Fone de celular sem marca",
   "avaliacao-baixa": "Avaliação baixa",
   "poucas-vendas": "Poucas vendas",
   "limite-categoria": "Limite diário da categoria",
@@ -81,6 +85,8 @@ export function assessDeal(deal: Deal, quality: BotConfig["quality"]): Assessmen
     reasons.push("marca-desconhecida");
   }
   if (quality.blockAmbiguousTitles && hasAmbiguousVariants(deal.title)) reasons.push("titulo-ambiguo");
+  if (category === "fonte" && isBudgetPowerSupply(deal.title)) reasons.push("fonte-de-baixa-qualidade");
+  if (!known && isGenericPhoneEarphone(deal.title)) reasons.push("fone-generico");
   if (deal.rating !== undefined && quality.minRating > 0 && deal.rating < quality.minRating) reasons.push("avaliacao-baixa");
   if (deal.sales !== undefined && quality.minSales > 0 && deal.sales < quality.minSales) reasons.push("poucas-vendas");
 
@@ -93,4 +99,20 @@ export function assessDeal(deal: Deal, quality: BotConfig["quality"]): Assessmen
   if (deal.title.length > 180) score -= 3;
 
   return { category, brand, knownBrand: known, score, reasons };
+}
+
+/** Marcas de fonte com historico ruim de protecao/potencia real: fonte ruim queima o PC inteiro. */
+const BUDGET_PSU = /\b(?:fortrek|k-?mex|knup|hayom|c3\s?tech|brazil\s?pc|bluecase|mymax|goldentec|duex|oex|multilaser|elg|kmex|tgt|hoopson|vinik|pcyes\s+(?:spark|electro)|aerocool\s+(?:kcas|lux))\b/;
+
+export function isBudgetPowerSupply(title: string): boolean {
+  return BUDGET_PSU.test(normalizeText(title));
+}
+
+/** Fone de celular (USB-C/P2/intra) sem marca: nao e produto de setup e costuma ter qualidade ruim. */
+export function isGenericPhoneEarphone(title: string): boolean {
+  const t = normalizeText(title);
+  const earphone = /\b(?:fone|fones|earphone|earbuds?|intra-?auricular|in-?ear)\b/.test(t);
+  const phoneOriented = /\b(?:tipo-?c|usb-?c|p2|iphone|android|celular|samsung|xiaomi|motorola)\b/.test(t);
+  const gaming = /\b(?:headset gamer|7\.1|surround|2\.4g|over-?ear)\b/.test(t);
+  return earphone && phoneOriented && !gaming;
 }

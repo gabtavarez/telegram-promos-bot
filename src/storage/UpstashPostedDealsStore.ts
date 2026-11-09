@@ -126,12 +126,12 @@ export class UpstashPostedDealsStore implements DealsStore {
   async savePublishedOffer(offer: PublishedOffer): Promise<void> {
     await this.withMutationLock(async () => {
       const offers = await this.getPublishedOffers();
-      const updated = [offer, ...offers.filter((item) => item.messageId !== offer.messageId)].slice(0, 100);
+      const updated = [offer, ...offers.filter((item) => item.messageId !== offer.messageId)].slice(0, 300);
       await this.command<string>(["SET", publishedKey(), JSON.stringify(updated)]);
     });
   }
 
-  async getPublishedOffers(limit = 100): Promise<PublishedOffer[]> {
+  async getPublishedOffers(limit = 300): Promise<PublishedOffer[]> {
     const value = await this.command<string | null>(["GET", publishedKey()]);
     return parseJson<PublishedOffer[]>(value, []).slice(0, limit);
   }

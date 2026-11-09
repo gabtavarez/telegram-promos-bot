@@ -38,6 +38,10 @@ export function isSameProduct(titleA: string, titleB: string): boolean {
   const brandA = detectBrand(titleA);
   const brandB = detectBrand(titleB);
   if (brandA.known && brandB.known && brandA.brand !== brandB.brand) return false;
+  // Mesmo codigo de modelo e mesma marca ("AJAZZ AK820" com titulos bem diferentes) = mesmo produto.
+  const strongModel = shared.some((token) => isModelToken(token) && token.length >= 4);
+  const sameBrand = brandA.known && brandB.known && brandA.brand === brandB.brand;
+  if (strongModel && (sameBrand || jaccard >= 0.3)) return true;
   return jaccard >= 0.75 || (sharedModels >= 1 && jaccard >= 0.5);
 }
 
@@ -51,10 +55,15 @@ export function isRecentRepeat(
   now = Date.now(),
   windowMs = 48 * 60 * 60 * 1_000,
   minPriceDrop = 0.08,
+  memoryMs = 7 * 24 * 60 * 60 * 1_000,
 ): boolean {
   return recentOffers.some((offer) => {
-    if (now - Date.parse(offer.publishedAt) >= windowMs) return false;
+    const age = now - Date.parse(offer.publishedAt);
+    if (age >= memoryMs) return false;
     if (!isSameProduct(deal.title, offer.deal.title)) return false;
-    return deal.currentPrice > offer.deal.currentPrice * (1 - minPriceDrop);
+    // Dentro da janela: so volta com queda relevante de preco.
+    if (age < windowMs) return deal.currentPrice > offer.deal.currentPrice * (1 - minPriceDrop);
+    // Depois da janela (ate 7 dias): so volta se estiver pelo menos tao barato quanto da ultima vez.
+    return deal.currentPrice > offer.deal.currentPrice * 1.01;
   });
 }
