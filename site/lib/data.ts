@@ -89,7 +89,7 @@ export function toOffer(stored: StoredOffer): Offer {
     dealId: deal.id,
     title: deal.title,
     shortTitle: cleanTitle(deal.title, 90),
-    image: deal.imageUrl,
+    image: deal.imageUrl.replace(/^http:\/\//, "https://"),
     price: deal.currentPrice,
     previousPrice: discount ? deal.previousPrice : undefined,
     discount,

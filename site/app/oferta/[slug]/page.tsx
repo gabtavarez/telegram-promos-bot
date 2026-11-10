@@ -30,6 +30,10 @@ export default async function OfferPage({ params }: { params: Promise<{ slug: st
   const average = prices.length ? prices.reduce((sum, value) => sum + value, 0) / prices.length : undefined;
   const lowest = prices.length ? Math.min(...prices) : undefined;
   const belowAverage = average ? Math.round((1 - offer.price / average) * 100) : 0;
+  // "De R$ X" que o histórico desmente (preço atual na média): não mostramos o desconto da loja.
+  const inflated = history.length >= 5 && belowAverage < 3;
+  const previousPrice = inflated ? undefined : offer.previousPrice;
+  const discount = inflated ? undefined : offer.discount;
   const verdict = prices.length < 3
     ? undefined
     : offer.price <= (lowest ?? Infinity) ? { tone: "good", text: "Menor preço que o bot já viu" }
@@ -51,7 +55,7 @@ export default async function OfferPage({ params }: { params: Promise<{ slug: st
         <div className="detail__media">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={offer.image} alt={offer.shortTitle} referrerPolicy="no-referrer" />
-          {offer.discount ? <span className="badge badge--off badge--lg">-{offer.discount}%</span> : null}
+          {discount ? <span className="badge badge--off badge--lg">-{discount}%</span> : null}
         </div>
 
         <div className="detail__info">
@@ -65,7 +69,7 @@ export default async function OfferPage({ params }: { params: Promise<{ slug: st
           {!offer.active ? <p className="notice">Esta oferta foi encerrada: o produto esgotou ou o preço mudou. Confira o preço atual na loja.</p> : null}
 
           <div className="detail__price">
-            {offer.previousPrice ? <s>{brl.format(offer.previousPrice)}</s> : null}
+            {previousPrice ? <s>{brl.format(previousPrice)}</s> : null}
             <strong>{brl.format(offer.price)}</strong>
             {offer.installment ? <small>{offer.installment}</small> : null}
           </div>
