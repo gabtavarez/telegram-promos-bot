@@ -1,4 +1,6 @@
 import type { AffiliateProvider } from "../providers/AffiliateProvider.js";
+import { runtimeConfig } from "../config/runtime.js";
+import type { CategoryId } from "../config/botConfig.js";
 import type { DealsStore } from "../storage/DealsStore.js";
 import type { Deal, ProviderName } from "../types/Deal.js";
 import { addAffiliateTag } from "../utils/affiliate.js";
@@ -124,7 +126,8 @@ export class DealsJob {
       const limits = effectiveDiversity(cfg);
       let diverse = available.filter((deal) => {
         const assessment = assessments.get(deal.id);
-        const block = diversityBlock(deal, assessment?.category ?? detectCategory(deal.title), assessment?.brand, diversityCtx, limits);
+        const dealCategory = assessment?.category ?? detectCategory(deal.title);
+        const block = diversityBlock(deal, dealCategory, assessment?.brand, diversityCtx, priorityLimits(limits, dealCategory, cfg));
         if (block) reject(block);
         return !block;
       });
@@ -448,6 +451,7 @@ export class DealsJob {
       const raw = await this.store.getConfig?.();
       this.config = parseBotConfig(raw);
       this.configLoadedAt = Date.now();
+      runtimeConfig.priorityCategories = this.config.priority.categories;
       this.publisher.setAdOptions(this.config.ad);
     } catch (error) {
       console.warn("Nao foi possivel ler a configuracao do painel; mantendo a anterior.", error);
@@ -726,7 +730,7 @@ async function selectFirstAvailableDeal(
   cfg: BotConfig,
 ): Promise<Deal | undefined> {
   const ranked = [...deals]
-    .map((deal) => ({ deal, score: scoreCandidate(deal, assessments.get(deal.id), ctx) }))
+    .map((deal) => ({ deal, score: scoreCandidate(deal, assessments.get(deal.id), ctx, cfg.priority) }))
     .sort((a, b) => b.score - a.score || a.deal.currentPrice - b.deal.currentPrice);
   for (const { deal } of ranked.slice(0, 12)) {
     if (await isDealAvailable(deal)) return deal;
@@ -735,14 +739,22 @@ async function selectFirstAvailableDeal(
 }
 
 /** Pontuacao final de selecao: qualidade/marca + desconto + historico + cupom, menos repeticao de categoria/loja/marca. */
-export function scoreCandidate(deal: Deal, assessment: Assessment | undefined, ctx: DiversityContext): number {
+export function scoreCandidate(
+  deal: Deal,
+  assessment: Assessment | undefined,
+  ctx: DiversityContext,
+  priority?: BotConfig["priority"],
+): number {
   const category = assessment?.category ?? detectCategory(deal.title);
+  const priorityBonus = priority && category !== "outros" && priority.categories.includes(category)
+    ? (priority.strength === "forte" ? 35 : 15)
+    : 0;
   const quality = Math.max(0, assessment?.score ?? getHardwareQualityScore(deal.title));
   const discount = Math.min(getVerifiedDiscount(deal) ?? 0, 60);
   const historyBonus = Math.max(0, Math.min(deal.priceHistory?.percentBelow30DayAverage ?? 0, 20));
   const couponBonus = deal.couponCode && deal.couponVerified ? 12 : 0;
   const storeBonus = deal.provider === "kabum" ? 14 : deal.provider === "amazon" || deal.provider === "mercado-livre" ? 8 : 0;
-  return quality * 5 + discount + historyBonus + couponBonus + storeBonus + getCategorySelectionBonus(deal.title) -
+  return quality * 5 + discount + historyBonus + couponBonus + storeBonus + priorityBonus + getCategorySelectionBonus(deal.title) -
     diversityPenalty(deal, category, assessment?.brand, ctx);
 }
 
@@ -949,6 +961,13 @@ function providerName(provider: ProviderName): string {
 
 function couponKey(coupon: Coupon): string {
   return `${coupon.advertiserId}:${coupon.advertiserName.toLowerCase()}:${coupon.code.toUpperCase()}`;
+}
+
+/** Categoria em foco pode aparecer mais vezes no dia: o dobro (forte) ou +2 (leve). */
+export function priorityLimits(limits: BotConfig["diversity"], category: string, cfg: BotConfig): BotConfig["diversity"] {
+  if (limits.maxPerCategoryPerDay === 0 || !cfg.priority.categories.includes(category as CategoryId)) return limits;
+  const cap = cfg.priority.strength === "forte" ? limits.maxPerCategoryPerDay * 2 : limits.maxPerCategoryPerDay + 2;
+  return { ...limits, maxPerCategoryPerDay: cap };
 }
 
 /** Modo evento dobra os limites de diversidade e encurta o tempo maximo sem post. */

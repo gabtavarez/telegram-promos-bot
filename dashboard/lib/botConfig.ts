@@ -119,6 +119,11 @@ export const botConfigSchema = z.object({
     blockedBrands: [],
     preferredBrands: [],
   }),
+  /** Categorias em foco: ganham preferencia na escolha, limite diario maior e buscas extras. */
+  priority: z.object({
+    categories: z.array(category).max(CATEGORY_IDS.length).default([]),
+    strength: z.enum(["leve", "forte"]).default("forte"),
+  }).default({ categories: [], strength: "forte" }),
   diversity: z.object({
     /** Maximo de ofertas da mesma categoria nas ultimas 24h (0 = sem limite). */
     maxPerCategoryPerDay: z.number().int().min(0).max(50).default(5),

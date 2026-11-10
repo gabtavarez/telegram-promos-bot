@@ -17,9 +17,10 @@ const hourLabel = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
 
 export function BotEditor() {
   const { draft, edit } = useConfig();
-  const { bot, filters, quality, diversity } = draft;
+  const { bot, filters, quality, diversity, priority } = draft;
   const setQuality = (patch: Partial<BotConfig["quality"]>) => edit((current) => ({ ...current, quality: { ...current.quality, ...patch } }));
   const setDiversity = (patch: Partial<BotConfig["diversity"]>) => edit((current) => ({ ...current, diversity: { ...current.diversity, ...patch } }));
+  const setPriority = (patch: Partial<BotConfig["priority"]>) => edit((current) => ({ ...current, priority: { ...current.priority, ...patch } }));
   const toggleIn = (list: CategoryId[], id: CategoryId) => (list.includes(id) ? list.filter((item) => item !== id) : [...list, id]);
   const setBot = (patch: Partial<BotConfig["bot"]>) => edit((current) => ({ ...current, bot: { ...current.bot, ...patch } }));
   const setFilters = (patch: Partial<BotConfig["filters"]>) => edit((current) => ({ ...current, filters: { ...current.filters, ...patch } }));
@@ -97,6 +98,23 @@ export function BotEditor() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="section">
+        <h2>Categorias em foco</h2>
+        <p className="lede">As categorias marcadas viram prioridade: ganham preferência na escolha da próxima oferta, podem aparecer mais vezes no dia e recebem buscas extras na Shopee e nos mais vendidos do Mercado Livre. As outras continuam saindo, só com menos espaço.</p>
+        <Field label="Focar em" hint="Ex.: placa de vídeo, processador e monitor na Black Friday." stack>
+          <div className="chips">
+            {CATEGORY_IDS.filter((id) => !quality.disabledCategories.includes(id)).map((id) => (
+              <button key={id} type="button" className="pill" aria-pressed={priority.categories.includes(id)} onClick={() => setPriority({ categories: toggleIn(priority.categories, id) })}>{CATEGORY_LABEL[id]}</button>
+            ))}
+          </div>
+        </Field>
+        {priority.categories.length ? (
+          <Field label="Intensidade" hint="Forte: quase sempre escolhe uma categoria em foco quando há oferta boa nela e dobra o limite diário dela. Leve: só desempata e dá +2 no limite diário.">
+            <Segmented value={priority.strength} onChange={(value) => setPriority({ strength: value })} options={[{ id: "leve", label: "Leve" }, { id: "forte", label: "Forte" }]} />
+          </Field>
+        ) : null}
       </section>
 
       <section className="section">

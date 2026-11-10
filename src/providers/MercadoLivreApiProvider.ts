@@ -4,6 +4,8 @@ import type { MercadoLivreAuth } from "../services/MercadoLivreAuth.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
 import { calculateDiscount } from "../utils/price.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
+import { runtimeConfig } from "../config/runtime.js";
+import type { CategoryId } from "../config/botConfig.js";
 
 const API = "https://api.mercadolibre.com";
 /** Informatica; Eletronicos, Audio e Video; Games. */
@@ -37,6 +39,7 @@ interface PoolEntry {
 export class MercadoLivreApiProvider implements AffiliateProvider {
   readonly name = "Mercado Livre";
   private categories: string[] = [];
+  private readonly categoryNames = new Map<string, string>();
   private categoriesAt = 0;
   private categoryCursor = 0;
   private readonly highlightAt = new Map<string, number>();
@@ -153,8 +156,13 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
         const children = (data.children_categories ?? []).filter((child) => isRelevantCategory(child.name));
         for (const child of children) {
           found.add(child.id);
+          this.categoryNames.set(child.id, child.name);
           const grand = await get<{ children_categories?: Array<{ id: string; name: string }> }>(`/categories/${child.id}`).catch(() => undefined);
-          for (const sub of grand?.children_categories ?? []) if (isRelevantCategory(sub.name)) found.add(sub.id);
+          for (const sub of grand?.children_categories ?? []) {
+            if (!isRelevantCategory(sub.name)) continue;
+            found.add(sub.id);
+            this.categoryNames.set(sub.id, sub.name);
+          }
         }
       } catch (error) {
         console.warn(`Mercado Livre (API): falha ao listar categorias de ${root}: ${describe(error)}`);
@@ -169,8 +177,11 @@ export class MercadoLivreApiProvider implements AffiliateProvider {
   }
 
   private async refreshHighlights(get: <T>(path: string) => Promise<T>): Promise<string> {
-    const due = this.categories.filter((id) => Date.now() - (this.highlightAt.get(id) ?? 0) > HIGHLIGHT_TTL_MS);
-    const selected: string[] = [];
+    // Categorias em foco no painel: mais vendidos atualizados a cada 1 h (as demais, 3 h) e sempre primeiro.
+    const focus = this.categories.filter((id) => isFocusCategory(this.categoryNames.get(id), runtimeConfig.priorityCategories));
+    const dueFocus = focus.filter((id) => Date.now() - (this.highlightAt.get(id) ?? 0) > 60 * 60_000);
+    const due = this.categories.filter((id) => !focus.includes(id) && Date.now() - (this.highlightAt.get(id) ?? 0) > HIGHLIGHT_TTL_MS);
+    const selected: string[] = dueFocus.slice(0, HIGHLIGHTS_PER_CYCLE);
     for (let i = 0; i < due.length && selected.length < HIGHLIGHTS_PER_CYCLE; i += 1) {
       selected.push(due[(this.categoryCursor + i) % due.length]!);
     }
@@ -274,6 +285,27 @@ function toDeal(id: string, title: string, url: string, imageUrl: string, offer:
 }
 
 const RELEVANT = /inform|comput|componente|perif|armazen|mem[oó]ria|placa|processad|monitor|teclad|mouse|fone|headset|[aá]udio|gamer|game|redes|roteador|notebook|acess[oó]rio|ssd|hd|refrigera|fonte|gabinete|webcam|microfone|cadeira|tv|v[ií]deo|console|controle/i;
+
+const FOCUS_PATTERNS: Partial<Record<CategoryId, RegExp>> = {
+  gpu: /placa.{0,4}de.{0,4}v[ií]deo|gpu/i,
+  cpu: /processador/i,
+  monitor: /monitor/i,
+  "placa-mae": /placa.{0,3}m[aã]e/i,
+  ram: /mem[oó]ria/i,
+  ssd: /ssd|armazenamento|disco/i,
+  fonte: /fonte/i,
+  gabinete: /gabinete/i,
+  cooler: /refrigera|cooler|ventoinha/i,
+  teclado: /teclado/i,
+  mouse: /mouse/i,
+  audio: /fone|headset|[aá]udio/i,
+  cadeira: /cadeira/i,
+  notebook: /notebook/i,
+};
+
+function isFocusCategory(name: string | undefined, focus: CategoryId[]): boolean {
+  return Boolean(name) && focus.some((category) => FOCUS_PATTERNS[category]?.test(name!));
+}
 
 function isRelevantCategory(name: string): boolean {
   return RELEVANT.test(name);

@@ -4,8 +4,10 @@ import type { Deal } from "../types/Deal.js";
 import { isPcHardwareDeal } from "../utils/hardwareFilter.js";
 import { parseBrlPrice } from "../utils/price.js";
 import type { AffiliateProvider } from "./AffiliateProvider.js";
+import { PRIORITY_QUERIES, runtimeConfig } from "../config/runtime.js";
 
 const API_URL = "https://open-api.affiliate.shopee.com.br/graphql";
+
 const HARDWARE_KEYWORDS = [
   "placa de video",
   "placa de video rx 7600",
@@ -136,7 +138,12 @@ export class ShopeeProvider implements AffiliateProvider {
     this.cycle += 1;
     const rotating = Array.from({ length: BRAND_KEYWORDS_PER_CYCLE }, (_, index) =>
       BRAND_KEYWORDS[(start + index) % BRAND_KEYWORDS.length]!);
-    return [...HARDWARE_KEYWORDS, ...rotating];
+    // Categorias em foco no painel: 2 buscas extras por categoria a cada ciclo (rotativas).
+    const focus = runtimeConfig.priorityCategories.flatMap((category) => {
+      const queries = PRIORITY_QUERIES[category] ?? [];
+      return queries.length ? [0, 1].map((offset) => queries[(this.cycle * 2 + offset) % queries.length]!) : [];
+    });
+    return [...new Set([...HARDWARE_KEYWORDS, ...focus, ...rotating])];
   }
 
   async getDeals(): Promise<Deal[]> {
